@@ -20,7 +20,6 @@ SPGroup *SPGroup::getRootGroup(){
 	}
 	return g;
 }
-
 inline void SPGroup::combineTwoSPGroup(SPGroup *g1, SPGroup *g2){
 	SPGroup *root;
 	if(g1->connCount >= g2->connCount){
@@ -40,7 +39,9 @@ SGNode **SGNode::createSGNodeList(int w, int h){
 	}
 	return nodeList;
 }
-
+//
+//	Debug使用 (可將graph印出)
+//
 void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
 	/********************** 印出node的pixel value 跟 edge 的weight ****************************
 		在印的地方有點confusing, 所以在這邊說明一下
@@ -76,13 +77,13 @@ void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
 				else
 					printf("      ");
 			}
-			printf("(%3d) ", nodeList[x][y].grayPxl);
+			//printf("(%3d) ", nodeList[x][y].grayPxl);
+			printf("(%3.0f) ", nodeList[x][y].agtCost);
 		}
 
 		printf("\n");
 	}
 }
-
 void SGNode::showSGNodeListEdgeAndGroup(SGNode **nodeList, int w, int h){
 	/********************** 印出node的group id 跟 edge 的weight ****************************/
 	for(int x=0; x<w ; x++){
@@ -90,9 +91,9 @@ void SGNode::showSGNodeListEdgeAndGroup(SGNode **nodeList, int w, int h){
 			printf("     ");
 			for(int y = 0 ; y < h ; y++){
 				if(nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ] != NULL)
-					printf("-%3.0f-       ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
+					printf("-%3.0f-             ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
 				else
-					printf("            ");
+					printf("                  ");
 			}
 			printf("\n");
 		}
@@ -105,27 +106,60 @@ void SGNode::showSGNodeListEdgeAndGroup(SGNode **nodeList, int w, int h){
 				else
 					printf("      ");
 			}
-			printf("(%3d) ", nodeList[x][y].group->connCount);
+			printf("(%1d,%1d) ", x, y);
+			//printf("(%3d) ", nodeList[x][y].deg);
+			//printf("(%3d) ", nodeList[x][y].group->connCount);
 			//printf("(%3d) ", nodeList[x][y].group->getId());
+
+			if(y < h){
+				if(nodeList[x][y].edges[ SGNode::SGEDGE_DOWN ] != NULL)
+					printf("-%3.0f- ", nodeList[x][y].edges[ SGNode::SGEDGE_DOWN ]->w );
+				else
+					printf("      ");
+			}
+		}
+
+		if(x < w){
+			printf("\n");
+			printf("     ");
+			for(int y = 0 ; y < h ; y++){
+				if(nodeList[x][y].edges[ SGNode::SGEDGE_RIGHT ] != NULL)
+					printf("-%3.0f-             ", nodeList[x][y].edges[ SGNode::SGEDGE_RIGHT ]->w );
+				else
+					printf("                  ");
+			}
 		}
 
 		printf("\n");
 	}
 }
-
+//
 void SGNode::setPixel(uint32_t pixel){
 	this->grayPxl = pixel;
 }
-
 void SGNode::addNewEdge(SGEdge *newEdge, int direction){
 	if(this->edges[ direction ] == NULL)
 		this->deg++;
 	this->edges[ direction ] = newEdge;
 }
-
 void SGNode::assignSPGRootGroup(SPGroup *newGroup){
 	this->group->next = newGroup;
 }
+int SGNode::getOppositeDirectionFlag(int direction){
+		switch (direction)
+		{
+			case SGEDGE_UP:
+				return SGEDGE_DOWN;
+			case SGEDGE_DOWN:
+				return SGEDGE_UP;
+			case SGEDGE_LEFT:
+				return SGEDGE_RIGHT;
+			case SGEDGE_RIGHT:
+				return SGEDGE_LEFT;
+			default:
+				return -1;
+		}
+	}
 
 SGEdge *SGEdge::createNewSGEdge(int cost){
 	SGEdge * newEdge = new SGEdge();
@@ -141,15 +175,16 @@ SGECostNode *SGECostNode::creatSGECostNode(uint16_t x1, uint16_t y1, uint16_t x2
 	newNode->y2 = y2;
 	return newNode;
 }
-
 SGECostNode **SGECostNode::initSGECostList(int len){
 	SGECostNode **costList = new SGECostNode*[len];
-	for(int i = 0 ; i < IntensityLimit ; i++){
+	for(int i = 0 ; i < len ; i++){
 		costList[i] = NULL;
 	}
 	return costList;
 }
-
+void SGECostNode::freeEmptySGECostList(SGECostNode **costList, int len){
+	free(costList);
+}
 void SGECostNode::showSGECostList(SGECostNode **costList, int len){
 	for(int i = 0 ; i < len ; i++){
 		if( costList[i] != NULL ){
@@ -167,6 +202,9 @@ void SGECostNode::showSGECostList(SGECostNode **costList, int len){
 	}
 }
 
+/*********************************************
+	  Kruskal's Algorithm Implementation
+*********************************************/
 void appendToSGECostList(SGECostNode **costList, SGECostNode *newNode, uint32_t idx){
 	if( costList[idx] == NULL ){//head is NULL
 		costList[idx] = newNode;
@@ -178,35 +216,6 @@ void appendToSGECostList(SGECostNode **costList, SGECostNode *newNode, uint32_t 
 		lastNode->next = newNode;
 	}
 }
-
-void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
-	//使用8bit灰階的話 intensityLimit 就是 256 色
-	SGECostNode **costList = SGECostNode::initSGECostList( IntensityLimit );
-
-	for(int x = 0 ; x < w ; x++){
-		for(int y = 0 ; y < h ; y++){
-			nodeList[x][y].setPixel( mat[x][y] );
-
-			if( x > 0 ){//處理左方edge
-				int x1 = x - 1;
-				SGECostNode *newNode = SGECostNode::creatSGECostNode(x1, y, x, y);
-				int diff = abs(mat[x1][y] - mat[x][y]);
-				appendToSGECostList(costList, newNode, diff);
-			}
-
-			if( y > 0 ){//處理上方edge
-				int y1 = y - 1;
-				SGECostNode *newNode = SGECostNode::creatSGECostNode(x, y1, x, y);
-				int diff = abs(mat[x][y1] - mat[x][y]);
-				appendToSGECostList(costList, newNode, diff);
-			}
-		}
-	}
-
-	SGECostNode::showSGECostList(costList, IntensityLimit);
-	addMSTEdgeToNodeList(nodeList, costList, IntensityLimit, w, h);
-}
-
 inline void connectEdgeBtwTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost){
 	SGEdge *newEdge = SGEdge::createNewSGEdge(cost);
 
@@ -219,7 +228,6 @@ inline void connectEdgeBtwTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, 
 		node2.addNewEdge(newEdge, SGNode::SGEDGE_UP);  // node2
 	}
 }
-
 bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost){
 	SPGroup *g1 = node1.group;
 	SPGroup *g2 = node2.group;
@@ -257,7 +265,6 @@ bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost
 	}
 	return true;
 }
-
 void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costListLen, int w, int h){
 	for(int i=0 ; i<costListLen ; i++){
 		SGECostNode *costNode = costList[i];
@@ -284,4 +291,103 @@ void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costLis
 			costNode = nextNode;
 		}
 	}
+}
+SGNode *getRootOfMST(SGNode **nodeList, int w, int h){
+	//由於暫時還看不出root不同會有什麼差別(速度跟結果似乎都不受影像), 因此直接圖中間的一點作為root
+	return &nodeList[w/2][h/2];
+}
+void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
+	//使用8bit灰階的話 intensityLimit 就是 256 色
+	SGECostNode **costList = SGECostNode::initSGECostList( IntensityLimit );
+
+	for(int x = 0 ; x < w ; x++){
+		for(int y = 0 ; y < h ; y++){
+			nodeList[x][y].setPixel( mat[x][y] );
+
+			if( x > 0 ){//處理左方edge
+				int x1 = x - 1;
+				SGECostNode *newNode = SGECostNode::creatSGECostNode(x1, y, x, y);
+				int diff = abs(mat[x1][y] - mat[x][y]);
+				appendToSGECostList(costList, newNode, diff);
+			}
+
+			if( y > 0 ){//處理上方edge
+				int y1 = y - 1;
+				SGECostNode *newNode = SGECostNode::creatSGECostNode(x, y1, x, y);
+				int diff = abs(mat[x][y1] - mat[x][y]);
+				appendToSGECostList(costList, newNode, diff);
+			}
+		}
+	}
+
+	SGECostNode::showSGECostList(costList, IntensityLimit);
+	addMSTEdgeToNodeList(nodeList, costList, IntensityLimit, w, h);
+	SGECostNode::freeEmptySGECostList(costList, IntensityLimit);
+}
+
+/*******************************************************
+		Non local cost aggregation Implementation
+*******************************************************/
+
+CostAggregator::CostAggregator(SGNode **nList){
+	this->nodeList = nList;
+}
+void CostAggregator::upwardAggregation(int x, int y, int parentDirection){
+	//先往下要求所有子節點更新其agtCost
+	this->nodeList[x][y].agtCost  = this->nodeList[x][y].grayPxl;
+	for(int i=0 ; i<SGNode::EDGELIMIT ; i++){
+		if(i != parentDirection && this->nodeList[x][y].edges[i] != NULL){
+			// debug
+			if(UPAGT_TraceEachStep){
+				printf("Cost Aggragating 座標[%2d][%2d] ", x, y);
+				if(i == SGNode::SGEDGE_UP)
+					printf("Go UP   ");
+				else if(i == SGNode::SGEDGE_DOWN)
+					printf("Go DOWN ");
+				else if(i == SGNode::SGEDGE_LEFT)
+					printf("Go LEFT ");
+				else if(i == SGNode::SGEDGE_RIGHT)
+					printf("Go RIGHT");
+			}
+			//
+
+			int rx, ry;
+			this->getPointedXY(x, y, rx, ry, i);
+
+			if(UPAGT_TraceEachStep){// debug
+				printf("-> [%2d][%2d]\n", rx, ry);
+				system("PAUSE");
+			}
+			//
+
+			upwardAggregation(rx, ry, SGNode::getOppositeDirectionFlag(i));
+			this->nodeList[x][y].agtCost += this->nodeList[rx][ry].agtCost;
+		}
+	}
+}
+void CostAggregator::downwardAggregation(int x, int y, int parentDirection){
+
+}
+void CostAggregator::getPointedXY(int x, int y, int &resultX, int &resultY, int direction){
+	switch (direction)
+		{
+			case SGNode::SGEDGE_UP:
+				resultX = x;
+				resultY = y-1;
+				break;
+			case SGNode::SGEDGE_DOWN:
+				resultX = x;
+				resultY = y+1;
+				break;
+			case SGNode::SGEDGE_LEFT:
+				resultX = x-1;
+				resultY = y;
+				break;
+			case SGNode::SGEDGE_RIGHT:
+				resultX = x+1;
+				resultY = y;
+				break;
+			default:
+				break;
+		}
 }

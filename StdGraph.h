@@ -44,6 +44,7 @@ struct SGECostNode{
 
 	static SGECostNode *creatSGECostNode(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
 	static SGECostNode **initSGECostList(int len);
+	static void freeEmptySGECostList(SGECostNode **costList, int len);
 	static void showSGECostList(SGECostNode **costList, int len);
 };
 
@@ -51,23 +52,28 @@ struct SGNode{
 	SGEdge **edges;
 	uint32_t deg; //edge amount
 	uint32_t grayPxl;// grayscale pixel
+	float agtCost;
 	SPGroup *group;
 
-	SGNode() : edges(NULL), deg(0), grayPxl(0), group(NULL){
-		this->edges = new SGEdge*[4];
-		this->edges[0] = NULL;
-		this->edges[1] = NULL;
-		this->edges[2] = NULL;
-		this->edges[3] = NULL;
+	static int const EDGELIMIT = 4;
+	SGNode() : edges(NULL), deg(0), grayPxl(0), agtCost(0), group(NULL){
+		this->edges = new SGEdge*[EDGELIMIT];
+		this->edges[SGEDGE_UP]	  = NULL;
+		this->edges[SGEDGE_LEFT]  = NULL;
+		this->edges[SGEDGE_DOWN]  = NULL;
+		this->edges[SGEDGE_RIGHT] = NULL;
 	};
 	void setPixel(uint32_t pixel);
 	void addNewEdge(SGEdge *newEdge, int direction);
 	void assignSPGRootGroup(SPGroup *newGroup);
 
-	static int const SGEDGE_UP    = 1;
-	static int const SGEDGE_LEFT  = 2;
-	static int const SGEDGE_DOWN  = 3;
-	static int const SGEDGE_RIGHT = 4;
+	//edge index(direction) flag
+	static int const SGEDGE_UP    = 0;
+	static int const SGEDGE_LEFT  = 1;
+	static int const SGEDGE_DOWN  = 2;
+	static int const SGEDGE_RIGHT = 3;
+
+	static int getOppositeDirectionFlag(int direction);
 
 	//edge type
 	static int const EDGETYPE_VERTICLE   = 0;
@@ -79,13 +85,30 @@ struct SGNode{
 };
 
 /*********************************************
-	Kruskal's Algorithm Implementation
+	  Kruskal's Algorithm Implementation
 *********************************************/
 
 void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h);
 void appendToSGECostList(SGECostNode **costList, SGECostNode *costNode, uint32_t idx); //index 就是 edge 的 weight (也就是vertex pixel相減的差值)
 void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costListLen, int w, int h);
 bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost);
+SGNode *getRootOfMST(SGNode **nodeList, int w, int h);
+
+/*******************************************************
+		Non local cost aggregation Implementation
+*******************************************************/
+class CostAggregator{
+	
+public:
+		CostAggregator(SGNode **nList);
+		void upwardAggregation(int x, int y, int parentDirection);
+		void downwardAggregation(int x, int y, int parentDirection);
+private:
+	static bool const UPAGT_TraceEachStep = false;
+	SGNode **nodeList;
+	void getPointedXY(int x, int y, int &resultX, int &resultY, int direction);
+};
+
 
 #endif // !STANDARDGRAPH_H
 
