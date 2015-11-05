@@ -105,6 +105,8 @@ public:
 		void downwardAggregation(int x, int y, int parentDirection);
 private:
 	static bool const UPAGT_TraceEachStep = false;
+	static bool const DOWNAGT_TraceEachStep = false;
+	static int const sigma = 13;
 	SGNode **nodeList;
 	void getPointedXY(int x, int y, int &resultX, int &resultY, int direction);
 };

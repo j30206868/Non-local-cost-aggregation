@@ -62,7 +62,7 @@ void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
 			printf("     ");
 			for(int y = 0 ; y < h ; y++){
 				if(nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ] != NULL)
-					printf("-%3.0f-       ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
+					printf("-%.3f-       ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
 				else
 					printf("            ");
 			}
@@ -73,7 +73,7 @@ void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
 		for(int y=0 ; y<h ; y++){
 			if(y > 0){
 				if(nodeList[x][y].edges[ SGNode::SGEDGE_UP ] != NULL)
-					printf("-%3.0f- ", nodeList[x][y].edges[ SGNode::SGEDGE_UP ]->w );
+					printf("-%.3f- ", nodeList[x][y].edges[ SGNode::SGEDGE_UP ]->w );
 				else
 					printf("      ");
 			}
@@ -320,7 +320,7 @@ void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
 		}
 	}
 
-	SGECostNode::showSGECostList(costList, IntensityLimit);
+	//SGECostNode::showSGECostList(costList, IntensityLimit);
 	addMSTEdgeToNodeList(nodeList, costList, IntensityLimit, w, h);
 	SGECostNode::freeEmptySGECostList(costList, IntensityLimit);
 }
@@ -338,7 +338,7 @@ void CostAggregator::upwardAggregation(int x, int y, int parentDirection){
 	for(int i=0 ; i<SGNode::EDGELIMIT ; i++){
 		if(i != parentDirection && this->nodeList[x][y].edges[i] != NULL){
 			// debug
-			if(UPAGT_TraceEachStep){
+			/*if(UPAGT_TraceEachStep){
 				printf("Cost Aggragating 座標[%2d][%2d] ", x, y);
 				if(i == SGNode::SGEDGE_UP)
 					printf("Go UP   ");
@@ -348,25 +348,63 @@ void CostAggregator::upwardAggregation(int x, int y, int parentDirection){
 					printf("Go LEFT ");
 				else if(i == SGNode::SGEDGE_RIGHT)
 					printf("Go RIGHT");
-			}
+			}*/
 			//
 
 			int rx, ry;
 			this->getPointedXY(x, y, rx, ry, i);
 
-			if(UPAGT_TraceEachStep){// debug
+			/*if(UPAGT_TraceEachStep){// debug
 				printf("-> [%2d][%2d]\n", rx, ry);
 				system("PAUSE");
-			}
+			}*/
 			//
-
+			//更新與子節點之間的weight
+			this->nodeList[x][y].edges[i]->w = exp(this->nodeList[x][y].edges[i]->w * -1 / sigma);
+			//
 			upwardAggregation(rx, ry, SGNode::getOppositeDirectionFlag(i));
-			this->nodeList[x][y].agtCost += this->nodeList[rx][ry].agtCost;
+			this->nodeList[x][y].agtCost += this->nodeList[rx][ry].agtCost * this->nodeList[x][y].edges[i]->w;
 		}
 	}
 }
 void CostAggregator::downwardAggregation(int x, int y, int parentDirection){
+	//往下要求所有子節點更新其agtCost
+	if(parentDirection != -1){
+		float weight = this->nodeList[x][y].edges[parentDirection]->w;
+		int px, py;
+		this->getPointedXY(x, y, px, py, parentDirection);
+		this->nodeList[x][y].agtCost = weight                         *
+									   this->nodeList[px][py].agtCost +
+									   (1 - weight*weight)            *
+									   this->nodeList[x][y].agtCost;	   
+	}
+	for(int i=0 ; i<SGNode::EDGELIMIT ; i++){
+		if(i != parentDirection && this->nodeList[x][y].edges[i] != NULL){
+			// debug
+			/*if(DOWNAGT_TraceEachStep){
+				printf("Cost Aggragating 座標[%2d][%2d] ", x, y);
+				if(i == SGNode::SGEDGE_UP)
+					printf("Go UP   ");
+				else if(i == SGNode::SGEDGE_DOWN)
+					printf("Go DOWN ");
+				else if(i == SGNode::SGEDGE_LEFT)
+					printf("Go LEFT ");
+				else if(i == SGNode::SGEDGE_RIGHT)
+					printf("Go RIGHT");
+			}*/
+			//
 
+			int rx, ry;
+			this->getPointedXY(x, y, rx, ry, i);
+
+			/*if(DOWNAGT_TraceEachStep){// debug
+				printf("-> [%2d][%2d]\n", rx, ry);
+				system("PAUSE");
+			}*/
+			//
+			downwardAggregation(rx, ry, SGNode::getOppositeDirectionFlag(i));
+		}
+	}
 }
 void CostAggregator::getPointedXY(int x, int y, int &resultX, int &resultY, int direction){
 	switch (direction)
