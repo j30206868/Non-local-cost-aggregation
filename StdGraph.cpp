@@ -6,7 +6,6 @@ uint32_t SPGroup::groupC = 0;
 SPGroup *SPGroup::createNewSPGroup(){
 	return new SPGroup();
 }
-
 int SPGroup::getId(){
 	if(this->next == NULL)
 		return this->id;
@@ -14,7 +13,6 @@ int SPGroup::getId(){
 		return getRootGroup()->id;
 	}
 }
-
 SPGroup *SPGroup::getRootGroup(){
 	SPGroup *g = this;
 	while(g->next != NULL){
@@ -24,10 +22,15 @@ SPGroup *SPGroup::getRootGroup(){
 }
 
 inline void SPGroup::combineTwoSPGroup(SPGroup *g1, SPGroup *g2){
-	if(g1->connCount >= g2->connCount)
-		g2->getRootGroup()->next = g1->getRootGroup();
-	else
-		g1->getRootGroup()->next = g2->getRootGroup();
+	SPGroup *root;
+	if(g1->connCount >= g2->connCount){
+		root = g1->getRootGroup();
+		g2->getRootGroup()->next = root;
+	}else{
+		root = g2->getRootGroup();
+		g1->getRootGroup()->next = root;
+	}
+	root->connCount++;
 }
 
 SGNode **SGNode::createSGNodeList(int w, int h){
@@ -38,35 +41,21 @@ SGNode **SGNode::createSGNodeList(int w, int h){
 	return nodeList;
 }
 
-void SGNode::showSGNodeListEdgeAndGroup(SGNode **nodeList, int w, int h){
-	for(int x=0; x<w ; x++){
-		if(x > 0){
-			printf("     ");
-			for(int y = 0 ; y < h ; y++){
-				if(nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ] != NULL)
-					printf("-%3.0f-       ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
-				else
-					printf("            ");
-			}
-			printf("\n");
-		}
-
-		printf("[%2d] ", x);
-		for(int y=0 ; y<h ; y++){
-			if(y > 0){
-				if(nodeList[x][y].edges[ SGNode::SGEDGE_UP ] != NULL)
-					printf("-%3.0f- ", nodeList[x][y].edges[ SGNode::SGEDGE_UP ]->w );
-				else
-					printf("      ");
-			}
-			printf("(%3d) ", nodeList[x][y].group->getId());
-		}
-
-		printf("\n");
-	}
-}
-
 void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
+	/********************** 印出node的pixel value 跟 edge 的weight ****************************
+		在印的地方有點confusing, 所以在這邊說明一下
+		由於實際上看一個矩陣 1  2  3 的時候
+							 4  5  6
+							 7  8  9
+		以二維陣列[x][y]存取時, x指的其實是由上到下([x][0]={1 4 7}), y指的是由左到右([0][y]={1 2 3})
+		但是這樣跟真實世界的座標定義是顛倒的
+		然而在寫程式的時候不想管那麼多
+		所以我們仍假裝不知道, 
+		在不需要視覺化時, 單純還是把 x->當作左右 y->當作上下
+		但是由於此function是要視覺化的印出來
+		所以在 y軸的時候 印的其實是 left 跟 right 的edge
+		       x軸的時候         是 top  跟 down 
+	***************************************************************/
 	for(int x=0; x<w ; x++){
 		if(x > 0){
 			printf("     ");
@@ -94,6 +83,36 @@ void SGNode::showSGNodeList(SGNode **nodeList, int w, int h){
 	}
 }
 
+void SGNode::showSGNodeListEdgeAndGroup(SGNode **nodeList, int w, int h){
+	/********************** 印出node的group id 跟 edge 的weight ****************************/
+	for(int x=0; x<w ; x++){
+		if(x > 0){
+			printf("     ");
+			for(int y = 0 ; y < h ; y++){
+				if(nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ] != NULL)
+					printf("-%3.0f-       ", nodeList[x][y].edges[ SGNode::SGEDGE_LEFT ]->w );
+				else
+					printf("            ");
+			}
+			printf("\n");
+		}
+
+		printf("[%2d] ", x);
+		for(int y=0 ; y<h ; y++){
+			if(y > 0){
+				if(nodeList[x][y].edges[ SGNode::SGEDGE_UP ] != NULL)
+					printf("-%3.0f- ", nodeList[x][y].edges[ SGNode::SGEDGE_UP ]->w );
+				else
+					printf("      ");
+			}
+			printf("(%3d) ", nodeList[x][y].group->connCount);
+			//printf("(%3d) ", nodeList[x][y].group->getId());
+		}
+
+		printf("\n");
+	}
+}
+
 void SGNode::setPixel(uint32_t pixel){
 	this->grayPxl = pixel;
 }
@@ -104,8 +123,8 @@ void SGNode::addNewEdge(SGEdge *newEdge, int direction){
 	this->edges[ direction ] = newEdge;
 }
 
-void SGNode::assignSPGroup(SPGroup *newGroup){
-	this->group = newGroup;
+void SGNode::assignSPGRootGroup(SPGroup *newGroup){
+	this->group->next = newGroup;
 }
 
 SGEdge *SGEdge::createNewSGEdge(int cost){
@@ -201,19 +220,15 @@ inline void connectEdgeBtwTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, 
 	}
 }
 
-inline bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost){
+bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost){
 	SPGroup *g1 = node1.group;
 	SPGroup *g2 = node2.group;
 
-	int g1ID = g1->getId();
-	int g2ID = g2->getId();
-	printf("g1[%2d] g2[%2d]\n",g1ID, g2ID);
-
 	int flag = 0; //0->both are null, 1->g1 not null, 2->both not null, 3->g1 is null but g2 is not 
-	if(g1ID != 0){
+	if(g1 != NULL){
 		flag++;
 	}
-	if(g2ID != 0){
+	if(g2 != NULL){
 		if(flag == 0)//g1 is null
 			flag = 3;
 		else{
@@ -222,28 +237,22 @@ inline bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, i
 	}
 
 	if(flag == 2){//both are in groups
-		if( g1ID != g2ID ){
+		if( g1->getId() != g2->getId() ){
 			connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
 			SPGroup::combineTwoSPGroup(g1, g2);
 		}else{//can't be connected, it will cause a cycle in the graph
 			return false;
 		}
 	}else if(flag == 3){//g1 = null
-		//node1.assignSPGroup(g2);
-		node1.group->next = g2;
+		node1.group = g2->getRootGroup();
 		connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
 	}else if(flag == 1){//g2 = null
-		//node2.assignSPGroup(g1);
-		node2.group->next = g1;
+		node2.group = g1->getRootGroup();
 		connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
 	}else{//both null
-		//SPGroup *newGroup = SPGroup::createNewSPGroup();
-		//node1.assignSPGroup(newGroup);
-		//node2.assignSPGroup(newGroup);
-		SPGroup::groupC++;
-		node1.group->id = SPGroup::groupC;
-		node2.group->id = SPGroup::groupC;
-		node1.group->next = node2.group;
+		SPGroup *newGroup = SPGroup::createNewSPGroup();
+		node1.group = newGroup;
+		node2.group = newGroup;
 		connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
 	}
 	return true;

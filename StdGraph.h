@@ -15,7 +15,10 @@ struct SPGroup{
 	SPGroup *next;
 	uint32_t connCount; // connection counter
 
-	SPGroup() : id(0), next(NULL), connCount(0) {};
+	SPGroup() : id(0), next(NULL), connCount(0) {
+		SPGroup::groupC++;
+		this->id = SPGroup::groupC;
+	};
 	int getId();
 	SPGroup *getRootGroup();
 
@@ -56,12 +59,10 @@ struct SGNode{
 		this->edges[1] = NULL;
 		this->edges[2] = NULL;
 		this->edges[3] = NULL;
-
-		group = SPGroup::createNewSPGroup();
 	};
 	void setPixel(uint32_t pixel);
 	void addNewEdge(SGEdge *newEdge, int direction);
-	void assignSPGroup(SPGroup *newGroup);
+	void assignSPGRootGroup(SPGroup *newGroup);
 
 	static int const SGEDGE_UP    = 1;
 	static int const SGEDGE_LEFT  = 2;
@@ -84,7 +85,7 @@ struct SGNode{
 void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h);
 void appendToSGECostList(SGECostNode **costList, SGECostNode *costNode, uint32_t idx); //index 就是 edge 的 weight (也就是vertex pixel相減的差值)
 void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costListLen, int w, int h);
-inline bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost);
+bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost);
 
 #endif // !STANDARDGRAPH_H
 

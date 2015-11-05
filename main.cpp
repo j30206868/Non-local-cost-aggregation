@@ -4,14 +4,14 @@ int const w = 3;
 int const h = 3;
 
 void testFunc(SGNode &node){
-	node.group = new SPGroup();
+	node.group = SPGroup::createNewSPGroup();
 	node.group->id = 1;
 }
 
 void main(){
-	SGNode testNode;
-	testFunc(testNode);
-	printf("testNode group: %d\n", testNode.group->id);
+	//SGNode testNode;
+	//testFunc(testNode);
+	//printf("testNode group: %d\n", testNode.group->id);
 
 	/*int mat[w][h] = {{1,  4, 8},  
 					 {1, 11, 6}, 
@@ -30,7 +30,10 @@ void main(){
 
 	buildKruskalMST((SGNode **)nodeList, (int **)mat, w, h);
 	 
+	printf("Graph:\n");
 	SGNode::showSGNodeList(nodeList, w, h);
+	printf("\nGroup info:\n");
+	SGNode::showSGNodeListEdgeAndGroup(nodeList, w, h);
 
 	system("PAUSE");
 }
