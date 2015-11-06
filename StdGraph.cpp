@@ -205,15 +205,13 @@ void SGECostNode::showSGECostList(SGECostNode **costList, int len){
 /*********************************************
 	  Kruskal's Algorithm Implementation
 *********************************************/
-void appendToSGECostList(SGECostNode **costList, SGECostNode *newNode, uint32_t idx){
+void appendToSGECostList(SGECostNode **costList, SGECostNode **tailList, SGECostNode *newNode, uint32_t idx){
 	if( costList[idx] == NULL ){//head is NULL
 		costList[idx] = newNode;
+		tailList[idx] = newNode;
 	}else{
-		SGECostNode *lastNode = costList[idx];
-		while( lastNode->next != NULL ){
-			lastNode = lastNode->next;
-		}
-		lastNode->next = newNode;
+		tailList[idx]->next = newNode;
+		tailList[idx] = tailList[idx]->next;
 	}
 }
 inline void connectEdgeBtwTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost){
@@ -237,24 +235,22 @@ bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost
 		flag++;
 	}
 	if(g2 != NULL){
-		if(flag == 0)//g1 is null
-			flag = 3;
-		else{
-			flag = 2;
+		if(flag == 0){//g1 is null
+			node1.group = g2->getRootGroup();
+			connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
+			return true;
+		}else{//both are in groups
+			if( g1->getId() != g2->getId() ){
+				connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
+				SPGroup::combineTwoSPGroup(g1, g2);
+				return true;
+			}else{//can't be connected, it will cause a cycle in the graph
+				return false;
+			}
 		}
 	}
 
-	if(flag == 2){//both are in groups
-		if( g1->getId() != g2->getId() ){
-			connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
-			SPGroup::combineTwoSPGroup(g1, g2);
-		}else{//can't be connected, it will cause a cycle in the graph
-			return false;
-		}
-	}else if(flag == 3){//g1 = null
-		node1.group = g2->getRootGroup();
-		connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
-	}else if(flag == 1){//g2 = null
+	if(flag == 1){//g2 = null
 		node2.group = g1->getRootGroup();
 		connectEdgeBtwTwoSGNode(node1, node2, edgeType, cost);
 	}else{//both null
@@ -270,16 +266,13 @@ void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costLis
 		SGECostNode *costNode = costList[i];
 		SGECostNode *nextNode = NULL;
 		while(costNode != NULL){
-			SGNode node1 = nodeList[costNode->x1][costNode->y1];
-			SGNode node2 = nodeList[costNode->x2][costNode->y2];
-
 			int edgeType;
 			if(costNode->x1 == costNode->x2)
 				edgeType = SGNode::EDGETYPE_VERTICLE;
 			else
 				edgeType = SGNode::EDGETYPE_HORIZONTAL;
 
-			bool isConnected = connectEdgeOfTwoSGNode(nodeList[costNode->x1][costNode->y1], nodeList[costNode->x2][costNode->y2], edgeType, i);
+			connectEdgeOfTwoSGNode(nodeList[costNode->x1][costNode->y1], nodeList[costNode->x2][costNode->y2], edgeType, i);
 
 			//debug
 			//SGNode::showSGNodeListEdgeAndGroup(nodeList, w, h);
@@ -287,7 +280,7 @@ void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costLis
 
 			//free this node after insertion
 			nextNode = costNode->next;
-			free(costNode);
+			//free(costNode);
 			costNode = nextNode;
 		}
 	}
@@ -296,10 +289,10 @@ SGNode *getRootOfMST(SGNode **nodeList, int w, int h){
 	//由於暫時還看不出root不同會有什麼差別(速度跟結果似乎都不受影像), 因此直接圖中間的一點作為root
 	return &nodeList[w/2][h/2];
 }
-void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
-	//使用8bit灰階的話 intensityLimit 就是 256 色
-	SGECostNode **costList = SGECostNode::initSGECostList( IntensityLimit );
-
+//使用8bit灰階的話 intensityLimit 就是 256 色
+SGECostNode **costList = SGECostNode::initSGECostList( IntensityLimit );
+SGECostNode **costTailList = SGECostNode::initSGECostList( IntensityLimit );
+SGECostNode ** buildCostList(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
 	for(int x = 0 ; x < w ; x++){
 		for(int y = 0 ; y < h ; y++){
 			nodeList[x][y].setPixel( mat[x][y] );
@@ -308,27 +301,29 @@ void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h){
 				int x1 = x - 1;
 				SGECostNode *newNode = SGECostNode::creatSGECostNode(x1, y, x, y);
 				int diff = abs(mat[x1][y] - mat[x][y]);
-				appendToSGECostList(costList, newNode, diff);
+				appendToSGECostList(costList, costTailList, newNode, diff);
 			}
 
 			if( y > 0 ){//處理上方edge
 				int y1 = y - 1;
 				SGECostNode *newNode = SGECostNode::creatSGECostNode(x, y1, x, y);
 				int diff = abs(mat[x][y1] - mat[x][y]);
-				appendToSGECostList(costList, newNode, diff);
+				appendToSGECostList(costList, costTailList, newNode, diff);
 			}
 		}
 	}
 
+	return costList;
+
 	//SGECostNode::showSGECostList(costList, IntensityLimit);
-	addMSTEdgeToNodeList(nodeList, costList, IntensityLimit, w, h);
-	SGECostNode::freeEmptySGECostList(costList, IntensityLimit);
+	//addMSTEdgeToNodeList(nodeList, costList, IntensityLimit, w, h);
+	//SGECostNode::freeEmptySGECostList(costList, IntensityLimit);
+	//SGECostNode::freeEmptySGECostList(costTailList, IntensityLimit);
 }
 
 /*******************************************************
 		Non local cost aggregation Implementation
 *******************************************************/
-
 CostAggregator::CostAggregator(SGNode **nList){
 	this->nodeList = nList;
 }
@@ -428,4 +423,34 @@ void CostAggregator::getPointedXY(int x, int y, int &resultX, int &resultY, int 
 			default:
 				break;
 		}
+}
+
+
+/**********************************************************
+					combined function
+**********************************************************/
+SGNode **getNonLocalCostAgtResult(std::string fname){
+	SGNode **nodeList;
+
+	cv::Mat image;
+    image = cv::imread(fname, CV_LOAD_IMAGE_GRAYSCALE);   // Read the file
+
+    if(! image.data )                              // Check for invalid input
+    {
+        std::cout <<  "Could not open or find the image" << std::endl ;
+        return NULL;
+    }
+
+	/*int w = 
+
+	int **mat = new int*[w]; 
+	for(int i=0 ; i<w ; i++){
+		mat[i] = new int[h];
+		//mat[i] = image.row(j);
+		for(int j=0; j<h ; j++){
+			uchar& uxy = image.at<uchar>(j, i);
+			mat[i][j] = (int)uxy;
+		}
+	}*/
+	return NULL;
 }

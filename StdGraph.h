@@ -7,6 +7,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <string>
+
+//for combined functions
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <iostream>
 
 #define IntensityLimit 256
 
@@ -88,7 +94,7 @@ struct SGNode{
 	  Kruskal's Algorithm Implementation
 *********************************************/
 
-void buildKruskalMST(SGNode **nodeList, int **mat, uint32_t w, uint32_t h);
+SGECostNode ** buildCostList(SGNode **nodeList, int **mat, uint32_t w, uint32_t h);
 void appendToSGECostList(SGECostNode **costList, SGECostNode *costNode, uint32_t idx); //index 就是 edge 的 weight (也就是vertex pixel相減的差值)
 void addMSTEdgeToNodeList(SGNode **nodeList, SGECostNode **costList, int costListLen, int w, int h);
 bool connectEdgeOfTwoSGNode(SGNode &node1, SGNode &node2, int edgeType, int cost);
@@ -111,6 +117,10 @@ private:
 	void getPointedXY(int x, int y, int &resultX, int &resultY, int direction);
 };
 
+/**********************************************************
+					combined function
+**********************************************************/
+SGNode **getNonLocalCostAgtResult(std::string fname);
 
 #endif // !STANDARDGRAPH_H
 
