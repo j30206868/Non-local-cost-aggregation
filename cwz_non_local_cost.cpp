@@ -142,7 +142,7 @@ void CostAggregator::showDisparityMap(){
 		dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
 	}
 	cv::imshow("dMap", dMap);
-	cvWaitKey(0);
+	cv::waitKey(0);
 }
 
 /*********************************************

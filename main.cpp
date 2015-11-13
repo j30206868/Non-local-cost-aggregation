@@ -278,7 +278,13 @@ int main()
 
 	ca->pickBestDepthForNodeList();
 
-	ca->showDisparityMap();
+	//ca->showDisparityMap();
+	cv::Mat dMap(h, w, CV_8U);
+	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
+	{
+		dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
+	}
+	cv::imwrite("dMap.bmp", dMap);
 
 	system("PAUSE");
 
