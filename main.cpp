@@ -78,9 +78,46 @@ void compute_gradient(float*gradient, uchar **gray_image, int h, int w)
 
 int main()
 {
+	cv::Mat ppmimg = cv::imread("dMap.ppm");
+
 	//build MST
-	cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
-	cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
+	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+
+	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
+    if( fs.isOpened() == false)
+    {
+        printf( "No More....Quitting...!" );
+        return 0;
+    }
+
+    cv::Mat matL , matR; //= Mat(480, 640, CV_16UC1);
+    fs["right"] >> matL;          
+	fs["left"] >> matR;       
+    fs.release();
+
+	cv::Mat left = cv::Mat(480, 640, CV_8UC3);
+	cv::Mat right = cv::Mat(480, 640, CV_8UC3);
+
+	for(int y=0; y<left.rows ; y++){
+		int x_ = 0;
+		for(int x=0; x<left.cols ; x++)
+		{
+			uchar lvalue = matL.at<unsigned short>(y, x) / 4;
+			left.at<uchar>(y, x_  ) = lvalue;
+			left.at<uchar>(y, x_+1) = lvalue;
+			left.at<uchar>(y, x_+2) = lvalue;
+
+			uchar rvalue = matR.at<unsigned short>(y, x) / 4;
+			right.at<uchar>(y, x_  ) = rvalue;
+			right.at<uchar>(y, x_+1) = rvalue;
+			right.at<uchar>(y, x_+2) = rvalue;
+
+			x_+=3;
+		}
+	}
+
+	/************************************/
 
 	cv::Mat left_gray;
 	cv::Mat right_gray;
@@ -285,6 +322,9 @@ int main()
 		dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
 	}
 	cv::imwrite("dMap.bmp", dMap);
+	cv::namedWindow("testw", CV_NORMAL);
+	cv::imshow("testw",dMap);
+	cv::waitKey(0);
 
 	system("PAUSE");
 
