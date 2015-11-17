@@ -3,8 +3,8 @@ __constant float color_ratio       = 0.11;
 __constant float gradient_ratio    = 0.89;
 __constant float max_color_cost    = 7.0;
 __constant float max_gradient_cost = 2.0;
-__constant int max_disparity = 100;
-__constant int width  = 640;
+__constant int max_disparity = 60;
+__constant int width  = 450;
 __constant float max_total_cost = 2.55;
 
 __kernel void matching_cost(__global const uchar* l_b, __global const uchar* l_g,  __global const uchar *l_r, __global const float *l_gradient, 
@@ -25,14 +25,26 @@ __kernel void matching_cost(__global const uchar* l_b, __global const uchar* l_g
 						   fabs( (float)(l_g[idx] - r_g[ridx]) ) +
 						   fabs( (float)(l_r[idx] - r_r[ridx]) );
 
-		color_cost = fmin(color_cost/3, max_color_cost);
+		color_cost = fmin(color_cost/3.0, max_color_cost);
 
-		float gradient_cost = fmin( fabs(l_gradient[idx] - r_gradient[idx]), max_gradient_cost);
+		float gradient_cost = fmin( fabs(l_gradient[idx] - r_gradient[ridx]), max_gradient_cost);
 
 		result[resultIdx+d] = color_cost*color_ratio + gradient_cost*gradient_ratio;
 	}
 	for(int d = maxD ; d < max_disparity ; d++){
-		result[resultIdx+d] = max_total_cost;
+		int ridx = idx+maxD-1;
+		//int ridx = idx + width - x - 1;
+		float color_cost = fabs( (float)(l_b[idx] - r_b[ridx]) ) +
+						   fabs( (float)(l_g[idx] - r_g[ridx]) ) +
+						   fabs( (float)(l_r[idx] - r_r[ridx]) );
+
+		color_cost = fmin(color_cost/3, max_color_cost);
+
+		float gradient_cost = fmin( fabs(l_gradient[idx] - r_gradient[ridx]), max_gradient_cost);
+
+		result[resultIdx+d] = color_cost*color_ratio + gradient_cost*gradient_ratio;
+		//result[resultIdx+d] = result[resultIdx+maxD-1];
+		//result[resultIdx+d] = max_total_cost;
 	}
 }
 

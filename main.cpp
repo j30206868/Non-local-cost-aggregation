@@ -78,13 +78,14 @@ void compute_gradient(float*gradient, uchar **gray_image, int h, int w)
 
 int main()
 {
-	cv::Mat ppmimg = cv::imread("dMap.ppm");
+	//cv::Mat ppmimg = cv::imread("dolls.ppm");
+	//cv::imwrite("dolls_ctmf.bmp", ppmimg);
 
 	//build MST
-	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
-	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+	cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
+	cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
 
-	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
+	/*cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
     if( fs.isOpened() == false)
     {
         printf( "No More....Quitting...!" );
@@ -118,7 +119,7 @@ int main()
 	}
 
 	/************************************/
-
+	
 	cv::Mat left_gray;
 	cv::Mat right_gray;
 

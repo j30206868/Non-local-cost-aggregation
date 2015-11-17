@@ -20,7 +20,7 @@
 #include "common_func.h"
 
 #define IntensityLimit 256
-#define disparityLevel 100
+#define disparityLevel 60
 
 /******************************************************
 					Data Structure
