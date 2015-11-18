@@ -81,6 +81,7 @@
     <None Include="test.cl" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="cl_data_type.h" />
     <ClInclude Include="common_func.h" />
     <ClInclude Include="cwz_non_local_cost.h" />
   </ItemGroup>

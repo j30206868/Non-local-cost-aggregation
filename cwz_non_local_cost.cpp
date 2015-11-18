@@ -15,6 +15,7 @@ CostAggregator::CostAggregator(SGNode **nList, int _w, int _h){
 	this->w = _w;
 	this->h = _h;
 	this->MSTWeight = 0;
+	this->totalWeight = 0;
 	for(int i=0 ; i<IntensityLimit ; i++){
 		wHistogram[i] = exp(-double(i) / (CostAggregator::sigma * (IntensityLimit - 1)));
 	}
@@ -37,6 +38,7 @@ void CostAggregator::upwardAggregation(int x, int y, int parentDirection){
 			//
 			//更新與子節點之間的weight
 			this->MSTWeight += this->nodeList[y][x].edges[i]->w ;
+			this->totalWeight++;
 
 			upwardAggregation(rx, ry, SGNode::getOppositeDirectionFlag(i));
 
@@ -256,7 +258,6 @@ SGECostNode ** buildCostListFromCV(SGNode **nodeList, uchar **left_gray, uint32_
 	return costList;
 }
 
-
 void SGNode::addNewEdge(SGEdge *newEdge, int direction){
 	if(this->edges[ direction ] == NULL)
 		this->deg++;
@@ -333,13 +334,11 @@ inline void SPGroup::combineTwoSPGroup(SPGroup *g1Root, SPGroup *g2Root){
 	root->connCount++;
 }
 
-
 SGEdge *SGEdge::createNewSGEdge(int cost){
 	SGEdge * newEdge = new SGEdge();
 	newEdge->w = cost;
 	return newEdge;
 }
-
 
 SGECostNode *SGECostNode::creatSGECostNode(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2){
 	SGECostNode *newNode = new SGECostNode();

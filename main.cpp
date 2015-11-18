@@ -14,9 +14,10 @@
 
 #include <opencv2\opencv.hpp>
 #include "cwz_non_local_cost.h"
+#include "cl_data_type.h"
 
-const char* LeftIMGName  = "face/face2.png"; 
-const char* RightIMGName = "face/face1.png";
+const char* LeftIMGName  = "dolls/dolls1.png"; 
+const char* RightIMGName = "dolls/dolls2.png";
 
 cl_program load_program(cl_context context, const char* filename)
 {
@@ -78,14 +79,14 @@ void compute_gradient(float*gradient, uchar **gray_image, int h, int w)
 
 int main()
 {
-	//cv::Mat ppmimg = cv::imread("dolls.ppm");
-	//cv::imwrite("dolls_ctmf.bmp", ppmimg);
+	//cv::Mat ppmimg = cv::imread("hand.ppm");
+	//cv::imwrite("hand_mst_no_ctmf.bmp", ppmimg);
 
 	//build MST
-	cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
-	cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
+	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
 
-	/*cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
+	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
     if( fs.isOpened() == false)
     {
         printf( "No More....Quitting...!" );
@@ -93,8 +94,8 @@ int main()
     }
 
     cv::Mat matL , matR; //= Mat(480, 640, CV_16UC1);
-    fs["right"] >> matL;          
-	fs["left"] >> matR;       
+    fs["left"] >> matL; 
+	fs["right"] >> matR;                
     fs.release();
 
 	cv::Mat left = cv::Mat(480, 640, CV_8UC3);
@@ -182,15 +183,26 @@ int main()
 	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, cb, &devname[0], 0);
 	std::cout << "Device: " << devname.c_str() << "\n";
 
-	cl_command_queue queue = clCreateCommandQueue(context, devices[0], 0, 0);
-	if(queue == 0) {
-		std::cerr << "Can't create command queue\n";
+	cl_program program = load_program(context, "test.cl");
+	if(program == 0) {
+		std::cerr << "Can't load or build program\n";
 		clReleaseContext(context);
 		return 0;
 	}
 
-	const int DATA_SIZE = w * h;
+	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
+	if(matcher == 0) {
+		std::cerr << "Can't load kernel\n";
+		clReleaseProgram(program);
+		clReleaseContext(context);
+		return 0;
+	}
 
+	match_info *info = (match_info *) malloc(sizeof(info));
+	info->img_width = w;
+	info->max_d     = disparityLevel;
+
+	time_t step_up_kernel_s = clock();
 	cl_mem cl_l_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->b[0], NULL);
 	cl_mem cl_l_g = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->g[0], NULL);
 	cl_mem cl_l_r = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->r[0], NULL);
@@ -203,45 +215,14 @@ int main()
 
 	cl_mem cl_match_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * match_result_len, NULL, NULL);
 
+	cl_mem cl_match_info = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(match_info), info, NULL);
+
 	if(cl_l_b == 0 || cl_l_g == 0 || cl_l_r == 0 || cl_l_gradient == 0 ||
 	   cl_r_b == 0 || cl_r_g == 0 || cl_r_r == 0 || cl_r_gradient == 0 ||
 	   cl_match_result == 0) {
 		std::cerr << "Can't create OpenCL buffer\n";
-		clReleaseMemObject(cl_l_b);
-		clReleaseMemObject(cl_l_g);
-		clReleaseMemObject(cl_l_r);
-		clReleaseMemObject(cl_l_gradient);
-		clReleaseMemObject(cl_r_b);
-		clReleaseMemObject(cl_r_g);
-		clReleaseMemObject(cl_r_r);
-		clReleaseMemObject(cl_r_gradient);
-		clReleaseMemObject(cl_match_result);
-		clReleaseCommandQueue(queue);
-		clReleaseContext(context);
-		return 0;
-	}
-
-	cl_program program = load_program(context, "test.cl");
-	if(program == 0) {
-		std::cerr << "Can't load or build program\n";
-		clReleaseMemObject(cl_l_b);
-		clReleaseMemObject(cl_l_g);
-		clReleaseMemObject(cl_l_r);
-		clReleaseMemObject(cl_l_gradient);
-		clReleaseMemObject(cl_r_b);
-		clReleaseMemObject(cl_r_g);
-		clReleaseMemObject(cl_r_r);
-		clReleaseMemObject(cl_r_gradient);
-		clReleaseMemObject(cl_match_result);
-		clReleaseCommandQueue(queue);
-		clReleaseContext(context);
-		return 0;
-	}
-
-	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
-	if(matcher == 0) {
-		std::cerr << "Can't load kernel\n";
 		clReleaseProgram(program);
+		clReleaseKernel(matcher);
 		clReleaseMemObject(cl_l_b);
 		clReleaseMemObject(cl_l_g);
 		clReleaseMemObject(cl_l_r);
@@ -251,7 +232,6 @@ int main()
 		clReleaseMemObject(cl_r_r);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
-		clReleaseCommandQueue(queue);
 		clReleaseContext(context);
 		return 0;
 	}
@@ -265,8 +245,28 @@ int main()
 	clSetKernelArg(matcher, 6, sizeof(cl_mem), &cl_r_r);
 	clSetKernelArg(matcher, 7, sizeof(cl_mem), &cl_r_gradient);
 	clSetKernelArg(matcher, 8, sizeof(cl_mem), &cl_match_result);
+	clSetKernelArg(matcher, 9, sizeof(cl_mem), &cl_match_info);
+	
+	cl_command_queue queue = clCreateCommandQueue(context, devices[0], 0, 0);
+	if(queue == 0) {
+		std::cerr << "Can't create command queue\n";
+		clReleaseKernel(matcher);
+		clReleaseProgram(program);
+		clReleaseMemObject(cl_l_b);
+		clReleaseMemObject(cl_l_g);
+		clReleaseMemObject(cl_l_r);
+		clReleaseMemObject(cl_l_gradient);
+		clReleaseMemObject(cl_r_b);
+		clReleaseMemObject(cl_r_g);
+		clReleaseMemObject(cl_r_r);
+		clReleaseMemObject(cl_r_gradient);
+		clReleaseMemObject(cl_match_result);
+		clReleaseContext(context);
+		return 0;
+	}
+	printf("Setup kernel Time: %.6fs\n", double(clock() - step_up_kernel_s) / CLOCKS_PER_SEC);
 
-	size_t work_size = DATA_SIZE;
+	size_t work_size = w * h;
 	clock_t tOfCLStart = clock();
     /* Do your stuff here */
 	err = clEnqueueNDRangeKernel(queue, matcher, 1, 0, &work_size, 0, 0, 0, 0);
@@ -302,15 +302,19 @@ int main()
 	for(int x=0 ; x<w ; x++)
 	for(int d=0 ; d<disparityLevel ; d++)
 	{
-			nodeList[y][x].agtCost[d] = matching_result[mr_idx];
-			mr_idx++;
+		nodeList[y][x].agtCost[d] = matching_result[mr_idx];
+		mr_idx++;
 	}
+
+	//已經驗正matching cost的結果是一樣的
+	//matching_result = readMatchCostFromFile("cost.txt", h, w, disparityLevel, matching_result);
 
 	//Keep doing MST
 	SGECostNode **cList = buildCostListFromCV(nodeList, left_gray_arr, w, h);
 	addMSTEdgeToNodeList(nodeList, cList, IntensityLimit, w, h);
 	//Aggregation
 	ca->upwardAggregation(w/2, h/2, -1);
+	printf("count:%d total weight:%d\n", ca->totalWeight, ca->MSTWeight);
 
 	ca->downwardAggregation(w/2, h/2, -1);
 
@@ -322,6 +326,9 @@ int main()
 	{
 		dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
 	}
+
+	//readDisparityFromFile("disparity.txt", h, w, dMap);
+
 	cv::imwrite("dMap.bmp", dMap);
 	cv::namedWindow("testw", CV_NORMAL);
 	cv::imshow("testw",dMap);

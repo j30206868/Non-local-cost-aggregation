@@ -37,5 +37,8 @@
     <ClInclude Include="common_func.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
+    <ClInclude Include="cl_data_type.h">
+      <Filter>原始程式檔</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -20,7 +20,7 @@
 #include "common_func.h"
 
 #define IntensityLimit 256
-#define disparityLevel 60
+#define disparityLevel 100
 
 /******************************************************
 					Data Structure
@@ -121,6 +121,7 @@ public:
 	static float gradient_ratio;
 	
 	int MSTWeight;
+	int totalWeight;
 	float wHistogram[IntensityLimit];
 
 	CostAggregator(SGNode **nList, int _w, int _h);

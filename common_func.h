@@ -3,6 +3,8 @@
 
 #include <opencv2\opencv.hpp>
 
+#include <fstream>
+
 struct cwz_img{
 	uchar *r;
 	uchar *g;
@@ -82,4 +84,12 @@ uchar **cvmat_to_2d_arr(cv::Mat img, int h, int w);
 cwz_img *cvmat_colorimg_to_cwzimg(uchar ***color_arr, int h, int w);
 cwz_img *cvmat_colorimg_to_cwzimg(cv::Mat img, int h, int w);
 
+//將format string切成陣列
+int closestDelimiterPosi(std::string str, std::string *delimiters, int delCount, int &delLength);
+std::string *splitInstructions(std::string str, std::string *delimiters, int delCount, int &length);
+float *splitDataContent(std::string str, std::string delimiter, int &length);
+
+//讀檔案存成match cost
+float *readMatchCostFromFile(std::string fname, int h, int w, int max_disparity, float *my_match_cost);
+void readDisparityFromFile(std::string fname, int h, int w, cv::Mat &dMap);
 #endif //CWZ_COMMON_FUNC_H
