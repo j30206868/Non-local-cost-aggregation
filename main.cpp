@@ -18,6 +18,8 @@
 
 const char* LeftIMGName  = "face/face1.png"; 
 const char* RightIMGName = "face/face2.png";
+//const char* LeftIMGName  = "dolls/dolls1.png"; 
+//const char* RightIMGName = "dolls/dolls2.png";
 
 const char *getErrorString(cl_int error)
 {
@@ -166,8 +168,8 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
 	if(matcher == 0) { std::cerr << "Can't load matching_cost kernel\n"; return 0; }
 
-	match_info *info = (match_info *) malloc(sizeof(info));
-	info->img_width = w; info->max_d = disparityLevel;
+	match_info info;
+	info.img_height = h; info.img_width = w; info.max_d = disparityLevel;
 
 	time_t step_up_kernel_s = clock();
 
@@ -179,11 +181,11 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 
 	cl_mem cl_match_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * match_result_len, NULL, NULL);
 
-	cl_mem cl_match_info = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(match_info), info, NULL);
+	cl_mem cl_match_info = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(match_info), &info, NULL);
 
 	if(cl_l_rgb == 0 || cl_l_gradient == 0 ||
 	   cl_r_rgb == 0 || cl_r_gradient == 0 ||
-	   cl_match_result == 0) {
+	   cl_match_result == 0 || cl_match_info == 0) {
 		std::cerr << "Can't create OpenCL buffer\n";
 		clReleaseKernel(matcher);
 		clReleaseMemObject(cl_l_rgb);
@@ -191,6 +193,7 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
+		clReleaseMemObject(cl_match_info);
 		return 0;
 	}
 
@@ -210,6 +213,7 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
+		clReleaseMemObject(cl_match_info);
 		return 0;
 	}
 	printf("Setup kernel Time: %.6fs\n", double(clock() - step_up_kernel_s) / CLOCKS_PER_SEC);
@@ -238,6 +242,7 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 	clReleaseMemObject(cl_r_gradient);
 	clReleaseMemObject(cl_match_result);
 	clReleaseCommandQueue(queue);
+	clReleaseMemObject(cl_match_info);
 	
 	return 1;
 }
@@ -246,6 +251,10 @@ template<class T>
 T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program &program, cl_int &err,
 						   T *color_1d_arr, int node_c, int h, int w){
 	cl_kernel mdf_kernel;
+
+	match_info info;
+	info.img_height = h; info.img_width = w; info.max_d = disparityLevel;
+
 	if(eqTypes<int, T>()){
 		mdf_kernel = clCreateKernel(program, "MedianFilterBitonic", 0);
 		if(mdf_kernel == 0) { std::cerr << "Can't load MedianFilterBitonic kernel\n"; return 0; }
@@ -257,17 +266,20 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 	}
 	cl_mem cl_arr = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T) * node_c, color_1d_arr, NULL);
 	cl_mem cl_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(T) * node_c, NULL, NULL);
+	cl_mem cl_match_info = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(match_info), &info, NULL);
 
-	if(cl_arr == 0 || cl_result == 0) {
+	if(cl_arr == 0 || cl_result == 0 || cl_match_info == 0) {
 		std::cerr << "Can't create OpenCL buffer for median filter\n";
 		clReleaseKernel(mdf_kernel);
 		clReleaseMemObject(cl_arr);
 		clReleaseMemObject(cl_result);
+		clReleaseMemObject(cl_match_info);
 		return 0;
 	}
 
 	clSetKernelArg(mdf_kernel, 0, sizeof(cl_mem), &cl_arr);
 	clSetKernelArg(mdf_kernel, 1, sizeof(cl_mem), &cl_result);
+	clSetKernelArg(mdf_kernel, 2, sizeof(cl_mem), &cl_match_info);
 
 	cl_command_queue queue = clCreateCommandQueue(context, device, 0, 0);
 	if(queue == 0) {
@@ -275,6 +287,7 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 		clReleaseKernel(mdf_kernel);
 		clReleaseMemObject(cl_arr);
 		clReleaseMemObject(cl_result);
+		clReleaseMemObject(cl_match_info);
 		return 0;
 	}
 
@@ -289,7 +302,7 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 	if(err == CL_SUCCESS) {
 		err = clEnqueueReadBuffer(queue, cl_result, CL_TRUE, 0, sizeof(T) * node_c, &result_arr[0], 0, 0, 0);
 	}
-	printf("MDF Time taken: %.6fs\n", (double)(clock() - tOfCLStart)/CLOCKS_PER_SEC);
+	printf("MDF Time taken: %fs\n", (double)(clock() - tOfCLStart)/CLOCKS_PER_SEC);
 
 	if(err != CL_SUCCESS)  {
 		std::cout << getErrorString(err) << std::endl;
@@ -299,6 +312,7 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 		clReleaseMemObject(cl_arr);
 		clReleaseMemObject(cl_result);
 		clReleaseCommandQueue(queue);
+		clReleaseMemObject(cl_match_info);
 		return 0;
 	}
 
@@ -306,6 +320,7 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 	clReleaseMemObject(cl_arr);
 	clReleaseMemObject(cl_result);
 	clReleaseCommandQueue(queue);
+	clReleaseMemObject(cl_match_info);
 
 	return result_arr;
 }
@@ -434,17 +449,16 @@ int main()
 		idx++;
 	}
 	uchar *final_dmap;
-	if( !(final_dmap = apply_cl_color_img_mdf<uchar>(context, device, program, err, best_disparity, node_c, h, w)) ){
-		printf("dmap median filtering failed.\n");
-		return 0;
-	}
+	if( !(final_dmap = apply_cl_color_img_mdf<uchar>(context, device, program, err, best_disparity, node_c, h, w)) )
+	{ printf("dmap median filtering failed.\n"); return 0; }
+	
 	//ca->showDisparityMap();
 	cv::Mat dMap(h, w, CV_8U);
 	idx = 0;
 	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
 	{
 		//dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
-		dMap.at<uchar>(y,x) = final_dmap[idx] * (double) IntensityLimit / (double)disparityLevel;
+		dMap.at<uchar>(y,x) = final_dmap[idx];// * (double) IntensityLimit / (double)disparityLevel;
 		idx++;
 	}
 	//
