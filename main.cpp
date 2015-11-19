@@ -77,6 +77,41 @@ void compute_gradient(float*gradient, uchar **gray_image, int h, int w)
 	}
 }
 
+cl_device_id setup_opencl(cl_context &context, cl_int &err){
+	cl_uint num;
+	err = clGetPlatformIDs(0, 0, &num);
+	if(err != CL_SUCCESS) {
+		std::cerr << "Unable to get platforms\n";
+		return 0;
+	}
+
+	std::vector<cl_platform_id> platforms(num);
+	err = clGetPlatformIDs(num, &platforms[0], &num);
+	if(err != CL_SUCCESS) {
+		std::cerr << "Unable to get platform ID\n";
+		return 0;
+	}
+
+	cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[0]), 0 };
+	context = clCreateContextFromType(prop, CL_DEVICE_TYPE_DEFAULT, NULL, NULL, NULL);
+	if(context == 0) {
+		std::cerr << "Can't create OpenCL context\n";
+		return 0;
+	}
+
+	size_t cb;
+	clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &cb);
+	std::vector<cl_device_id> devices(cb / sizeof(cl_device_id));
+	clGetContextInfo(context, CL_CONTEXT_DEVICES, cb, &devices[0], 0);
+
+	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, 0, NULL, &cb);
+	std::string devname;
+	devname.resize(cb);
+	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, cb, &devname[0], 0);
+	std::cout << "Device: " << devname.c_str() << "\n";
+	return devices[0];
+}
+
 int main()
 {
 	//cv::Mat ppmimg = cv::imread("hand.ppm");
@@ -120,23 +155,21 @@ int main()
 	}
 
 	/************************************/
-	
-	cv::Mat left_gray;
-	cv::Mat right_gray;
-
-	cv::cvtColor(left, left_gray, CV_BGR2GRAY);
-	cv::cvtColor(right, right_gray, CV_BGR2GRAY);
+	time_t img_init_s = clock();
 
 	int w = left.cols;
 	int h = left.rows;
 
-	uchar ***left_color_arr  = cvmat_to_3d_arr(left , left.rows , left.cols , 3);
-	uchar ***right_color_arr = cvmat_to_3d_arr(right, right.rows, right.cols, 3);
-	uchar **left_gray_arr    = cvmat_to_2d_arr(left_gray , left_gray.rows , left_gray.cols );
-	uchar **right_gray_arr   = cvmat_to_2d_arr(right_gray, right_gray.rows, right_gray.cols);
+	int **left_color_arr = c3_mat_to_2d_int_arr(left, left.rows, left.cols);
+	int **right_color_arr = c3_mat_to_2d_int_arr(right, right.rows, right.cols);
 
-	cwz_img *left_cwz_img = cvmat_colorimg_to_cwzimg(left_color_arr, h, w);
-	cwz_img *right_cwz_img = cvmat_colorimg_to_cwzimg(right_color_arr, h, w);
+	uchar **left_gray_arr  = int_2d_arr_to_gray_arr(left_color_arr, h, w);
+	uchar **right_gray_arr = int_2d_arr_to_gray_arr(right_color_arr, h, w);
+
+	cl_match_elem *left_cwz_img  = cvmat_colorimg_to_match_elem(left_color_arr, h, w);
+	cl_match_elem *right_cwz_img = cvmat_colorimg_to_match_elem(right_color_arr, h, w);
+	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
+	
 	compute_gradient(left_cwz_img->gradient , left_gray_arr, h, w);
 	compute_gradient(right_cwz_img->gradient, right_gray_arr, h, w);
 
@@ -151,114 +184,60 @@ int main()
 							 OpenCL
 	*******************************************************/
 	cl_int err;
-	cl_uint num;
-	err = clGetPlatformIDs(0, 0, &num);
-	if(err != CL_SUCCESS) {
-		std::cerr << "Unable to get platforms\n";
-		return 0;
-	}
-
-	std::vector<cl_platform_id> platforms(num);
-	err = clGetPlatformIDs(num, &platforms[0], &num);
-	if(err != CL_SUCCESS) {
-		std::cerr << "Unable to get platform ID\n";
-		return 0;
-	}
-
-	cl_context_properties prop[] = { CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platforms[0]), 0 };
-	cl_context context = clCreateContextFromType(prop, CL_DEVICE_TYPE_DEFAULT, NULL, NULL, NULL);
-	if(context == 0) {
-		std::cerr << "Can't create OpenCL context\n";
-		return 0;
-	}
-
-	size_t cb;
-	clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &cb);
-	std::vector<cl_device_id> devices(cb / sizeof(cl_device_id));
-	clGetContextInfo(context, CL_CONTEXT_DEVICES, cb, &devices[0], 0);
-
-	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, 0, NULL, &cb);
-	std::string devname;
-	devname.resize(cb);
-	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, cb, &devname[0], 0);
-	std::cout << "Device: " << devname.c_str() << "\n";
+	cl_context context;
+	cl_device_id device = setup_opencl(context, err);
 
 	cl_program program = load_program(context, "test.cl");
-	if(program == 0) {
-		std::cerr << "Can't load or build program\n";
-		clReleaseContext(context);
-		return 0;
-	}
+	if(program == 0) { std::cerr << "Can't load or build program\n"; clReleaseContext(context); return 0; }
 
 	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
-	if(matcher == 0) {
-		std::cerr << "Can't load kernel\n";
-		clReleaseProgram(program);
-		clReleaseContext(context);
-		return 0;
-	}
+	if(matcher == 0) { std::cerr << "Can't load kernel\n"; clReleaseProgram(program); clReleaseContext(context); return 0; }
 
 	match_info *info = (match_info *) malloc(sizeof(info));
-	info->img_width = w;
-	info->max_d     = disparityLevel;
+	info->img_width = w; info->max_d = disparityLevel;
 
 	time_t step_up_kernel_s = clock();
-	cl_mem cl_l_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->b[0], NULL);
-	cl_mem cl_l_g = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->g[0], NULL);
-	cl_mem cl_l_r = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * left_cwz_img->node_c, &left_cwz_img->r[0], NULL);
+
+	cl_mem cl_l_rgb = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * left_cwz_img->node_c, &left_cwz_img->rgb[0], NULL);
 	cl_mem cl_l_gradient = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * left_cwz_img->node_c, &left_cwz_img->gradient[0], NULL);
 
-	cl_mem cl_r_b = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * right_cwz_img->node_c, &right_cwz_img->b[0], NULL);
-	cl_mem cl_r_g = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * right_cwz_img->node_c, &right_cwz_img->g[0], NULL);
-	cl_mem cl_r_r = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(uchar) * right_cwz_img->node_c, &right_cwz_img->r[0], NULL);
+	cl_mem cl_r_rgb = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int) * right_cwz_img->node_c, &right_cwz_img->rgb[0], NULL);
 	cl_mem cl_r_gradient = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(float) * right_cwz_img->node_c, &right_cwz_img->gradient[0], NULL);
 
 	cl_mem cl_match_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(float) * match_result_len, NULL, NULL);
 
 	cl_mem cl_match_info = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(match_info), info, NULL);
 
-	if(cl_l_b == 0 || cl_l_g == 0 || cl_l_r == 0 || cl_l_gradient == 0 ||
-	   cl_r_b == 0 || cl_r_g == 0 || cl_r_r == 0 || cl_r_gradient == 0 ||
+	if(cl_l_rgb == 0 || cl_l_gradient == 0 ||
+	   cl_r_rgb == 0 || cl_r_gradient == 0 ||
 	   cl_match_result == 0) {
 		std::cerr << "Can't create OpenCL buffer\n";
 		clReleaseProgram(program);
 		clReleaseKernel(matcher);
-		clReleaseMemObject(cl_l_b);
-		clReleaseMemObject(cl_l_g);
-		clReleaseMemObject(cl_l_r);
+		clReleaseMemObject(cl_l_rgb);
 		clReleaseMemObject(cl_l_gradient);
-		clReleaseMemObject(cl_r_b);
-		clReleaseMemObject(cl_r_g);
-		clReleaseMemObject(cl_r_r);
+		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
 		clReleaseContext(context);
 		return 0;
 	}
 
-	clSetKernelArg(matcher, 0, sizeof(cl_mem), &cl_l_b);
-	clSetKernelArg(matcher, 1, sizeof(cl_mem), &cl_l_g);
-	clSetKernelArg(matcher, 2, sizeof(cl_mem), &cl_l_r);
-	clSetKernelArg(matcher, 3, sizeof(cl_mem), &cl_l_gradient);
-	clSetKernelArg(matcher, 4, sizeof(cl_mem), &cl_r_b);
-	clSetKernelArg(matcher, 5, sizeof(cl_mem), &cl_r_g);
-	clSetKernelArg(matcher, 6, sizeof(cl_mem), &cl_r_r);
-	clSetKernelArg(matcher, 7, sizeof(cl_mem), &cl_r_gradient);
-	clSetKernelArg(matcher, 8, sizeof(cl_mem), &cl_match_result);
-	clSetKernelArg(matcher, 9, sizeof(cl_mem), &cl_match_info);
+	clSetKernelArg(matcher, 0, sizeof(cl_mem), &cl_l_rgb);
+	clSetKernelArg(matcher, 1, sizeof(cl_mem), &cl_l_gradient);
+	clSetKernelArg(matcher, 2, sizeof(cl_mem), &cl_r_rgb);
+	clSetKernelArg(matcher, 3, sizeof(cl_mem), &cl_r_gradient);
+	clSetKernelArg(matcher, 4, sizeof(cl_mem), &cl_match_result);
+	clSetKernelArg(matcher, 5, sizeof(cl_mem), &cl_match_info);
 	
-	cl_command_queue queue = clCreateCommandQueue(context, devices[0], 0, 0);
+	cl_command_queue queue = clCreateCommandQueue(context, device, 0, 0);
 	if(queue == 0) {
 		std::cerr << "Can't create command queue\n";
 		clReleaseKernel(matcher);
 		clReleaseProgram(program);
-		clReleaseMemObject(cl_l_b);
-		clReleaseMemObject(cl_l_g);
-		clReleaseMemObject(cl_l_r);
+		clReleaseMemObject(cl_l_rgb);
 		clReleaseMemObject(cl_l_gradient);
-		clReleaseMemObject(cl_r_b);
-		clReleaseMemObject(cl_r_g);
-		clReleaseMemObject(cl_r_r);
+		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
 		clReleaseContext(context);
@@ -285,13 +264,9 @@ int main()
 
 	clReleaseKernel(matcher);
 	clReleaseProgram(program);
-	clReleaseMemObject(cl_l_b);
-	clReleaseMemObject(cl_l_g);
-	clReleaseMemObject(cl_l_r);
+	clReleaseMemObject(cl_l_rgb);
 	clReleaseMemObject(cl_l_gradient);
-	clReleaseMemObject(cl_r_b);
-	clReleaseMemObject(cl_r_g);
-	clReleaseMemObject(cl_r_r);
+	clReleaseMemObject(cl_r_rgb);
 	clReleaseMemObject(cl_r_gradient);
 	clReleaseMemObject(cl_match_result);
 	clReleaseCommandQueue(queue);
