@@ -16,8 +16,8 @@
 #include "cwz_non_local_cost.h"
 #include "cl_data_type.h"
 
-const char* LeftIMGName  = "dolls/dolls1.png"; 
-const char* RightIMGName = "dolls/dolls2.png";
+const char* LeftIMGName  = "face/face1.png"; 
+const char* RightIMGName = "face/face2.png";
 
 cl_program load_program(cl_context context, const char* filename)
 {
@@ -111,85 +111,8 @@ cl_device_id setup_opencl(cl_context &context, cl_int &err){
 	std::cout << "Device: " << devname.c_str() << "\n";
 	return devices[0];
 }
-
-int main()
-{
-	//cv::Mat ppmimg = cv::imread("hand.ppm");
-	//cv::imwrite("hand_mst_no_ctmf.bmp", ppmimg);
-
-	//build MST
-	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
-	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
-
-	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
-    if( fs.isOpened() == false)
-    {
-        printf( "No More....Quitting...!" );
-        return 0;
-    }
-
-    cv::Mat matL , matR; //= Mat(480, 640, CV_16UC1);
-    fs["left"] >> matL; 
-	fs["right"] >> matR;                
-    fs.release();
-
-	cv::Mat left = cv::Mat(480, 640, CV_8UC3);
-	cv::Mat right = cv::Mat(480, 640, CV_8UC3);
-
-	for(int y=0; y<left.rows ; y++){
-		int x_ = 0;
-		for(int x=0; x<left.cols ; x++)
-		{
-			uchar lvalue = matL.at<unsigned short>(y, x) / 4;
-			left.at<uchar>(y, x_  ) = lvalue;
-			left.at<uchar>(y, x_+1) = lvalue;
-			left.at<uchar>(y, x_+2) = lvalue;
-
-			uchar rvalue = matR.at<unsigned short>(y, x) / 4;
-			right.at<uchar>(y, x_  ) = rvalue;
-			right.at<uchar>(y, x_+1) = rvalue;
-			right.at<uchar>(y, x_+2) = rvalue;
-
-			x_+=3;
-		}
-	}
-
-	/************************************/
-	time_t img_init_s = clock();
-
-	int w = left.cols;
-	int h = left.rows;
-
-	int **left_color_arr = c3_mat_to_2d_int_arr(left, left.rows, left.cols);
-	int **right_color_arr = c3_mat_to_2d_int_arr(right, right.rows, right.cols);
-
-	uchar **left_gray_arr  = int_2d_arr_to_gray_arr(left_color_arr, h, w);
-	uchar **right_gray_arr = int_2d_arr_to_gray_arr(right_color_arr, h, w);
-
-	cl_match_elem *left_cwz_img  = cvmat_colorimg_to_match_elem(left_color_arr, h, w);
-	cl_match_elem *right_cwz_img = cvmat_colorimg_to_match_elem(right_color_arr, h, w);
-	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
-	
-	compute_gradient(left_cwz_img->gradient , left_gray_arr, h, w);
-	compute_gradient(right_cwz_img->gradient, right_gray_arr, h, w);
-
-	SGNode **nodeList = SGNode::createSGNodeList(w, h);
-
-	CostAggregator *ca = new CostAggregator(nodeList, w, h);
-
-	int match_result_len = h * w * disparityLevel;
-	float *matching_result = new float[match_result_len];
-
-	/*******************************************************
-							 OpenCL
-	*******************************************************/
-	cl_int err;
-	cl_context context;
-	cl_device_id device = setup_opencl(context, err);
-
-	cl_program program = load_program(context, "test.cl");
-	if(program == 0) { std::cerr << "Can't load or build program\n"; clReleaseContext(context); return 0; }
-
+int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &program, cl_int &err, 
+						cl_match_elem *left_cwz_img, cl_match_elem *right_cwz_img, float *matching_result, int h, int w, int match_result_len){
 	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
 	if(matcher == 0) { std::cerr << "Can't load kernel\n"; clReleaseProgram(program); clReleaseContext(context); return 0; }
 
@@ -271,6 +194,90 @@ int main()
 	clReleaseMemObject(cl_match_result);
 	clReleaseCommandQueue(queue);
 	clReleaseContext(context);
+	return 1;
+}
+
+int main()
+{
+	//cv::Mat ppmimg = cv::imread("hand.ppm");
+	//cv::imwrite("hand_mst_no_ctmf.bmp", ppmimg);
+
+	//build MST
+	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
+	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+
+	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
+    if( fs.isOpened() == false)
+    {
+        printf( "No More....Quitting...!" );
+        return 0;
+    }
+
+    cv::Mat matL , matR; //= Mat(480, 640, CV_16UC1);
+    fs["left"] >> matL; 
+	fs["right"] >> matR;                
+    fs.release();
+
+	cv::Mat left = cv::Mat(480, 640, CV_8UC3);
+	cv::Mat right = cv::Mat(480, 640, CV_8UC3);
+
+	for(int y=0; y<left.rows ; y++){
+		int x_ = 0;
+		for(int x=0; x<left.cols ; x++)
+		{
+			uchar lvalue = matL.at<unsigned short>(y, x) / 4;
+			left.at<uchar>(y, x_  ) = lvalue;
+			left.at<uchar>(y, x_+1) = lvalue;
+			left.at<uchar>(y, x_+2) = lvalue;
+
+			uchar rvalue = matR.at<unsigned short>(y, x) / 4;
+			right.at<uchar>(y, x_  ) = rvalue;
+			right.at<uchar>(y, x_+1) = rvalue;
+			right.at<uchar>(y, x_+2) = rvalue;
+
+			x_+=3;
+		}
+	}
+
+	/************************************/
+	time_t img_init_s = clock();
+
+	int w = left.cols;
+	int h = left.rows;
+
+	int **left_color_arr = c3_mat_to_2d_int_arr(left, left.rows, left.cols);
+	int **right_color_arr = c3_mat_to_2d_int_arr(right, right.rows, right.cols);
+
+	uchar **left_gray_arr  = int_2d_arr_to_gray_arr(left_color_arr, h, w);
+	uchar **right_gray_arr = int_2d_arr_to_gray_arr(right_color_arr, h, w);
+
+	cl_match_elem *left_cwz_img  = cvmat_colorimg_to_match_elem(left_color_arr, h, w);
+	cl_match_elem *right_cwz_img = cvmat_colorimg_to_match_elem(right_color_arr, h, w);
+	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
+	
+	compute_gradient(left_cwz_img->gradient , left_gray_arr, h, w);
+	compute_gradient(right_cwz_img->gradient, right_gray_arr, h, w);
+
+	SGNode **nodeList = SGNode::createSGNodeList(w, h);
+
+	CostAggregator *ca = new CostAggregator(nodeList, w, h);
+
+	int match_result_len = h * w * disparityLevel;
+	float *matching_result = new float[match_result_len];
+
+	/*******************************************************
+							 OpenCL
+	*******************************************************/
+	cl_int err;
+	cl_context context;
+	cl_device_id device = setup_opencl(context, err);
+
+	cl_program program = load_program(context, "test.cl");
+	if(program == 0) { std::cerr << "Can't load or build program\n"; clReleaseContext(context); return 0; }
+
+	if( !apply_cl_cost_match(context, device, program, err, 
+						left_cwz_img, right_cwz_img, matching_result, h, w, match_result_len) )
+	{ printf("apply_cl_cost_match failed.\n"); }
 
 	int mr_idx = 0;
 	for(int y=0 ; y<h ; y++)
