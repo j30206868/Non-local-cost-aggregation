@@ -141,6 +141,8 @@ private:
 	static bool const DOWNAGT_TraceEachStep = false;
 };
 
+void compute_gradient(float*gradient, uchar **gray_image, int h, int w);
+
 #endif // !CWZ_NON_LOCAL_COST_H
 
 

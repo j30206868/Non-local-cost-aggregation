@@ -158,43 +158,30 @@ float *splitDataContent(std::string str, std::string delimiter, int &length){
 
 	return result;
 }
-cl_match_elem *cvmat_colorimg_to_match_elem(int **color_arr, int h, int w){
-	int node_c = h * w;
-	
-	cl_match_elem *cwzimg = new cl_match_elem(node_c);
-	
-	int node_idx = 0;
-	int mask_b = 0xFF;
-	int mask_g = mask_b << 8;
-	int mask_r = mask_g << 8;
+
+int *c3_mat_to_1d_int_arr(cv::Mat img, int h, int w){
+	int *arr = new int [h*w];
+	int idx = 0;
 	for(int y=0; y<h ; y++)
+	for(int x=0; x<w*3 ; x+=3)
 	{
-		for(int x=0; x<w ; x++)
-		{
-			cwzimg->rgb[node_idx] = color_arr[y][x];
-			node_idx++;
-		}
+		arr[idx] =   img.at<uchar>(y, x  )       |
+				    (img.at<uchar>(y, x+1) << 8) |
+					(img.at<uchar>(y, x+2) << 16);
+		idx++;
 	}
-	return cwzimg;
-}
-int **c3_mat_to_2d_int_arr(cv::Mat img, int h, int w){
-	int **arr = new_2d_arr<int>(h, w);
-	for(int y=0; y<h ; y++)
-	{
-		int x_ = 0;
-		for(int x=0; x<w ; x++)
-		{
-			//printf("origin bgr b:%x g:%x r:%x\n", img.at<uchar>(y, x_  ), img.at<uchar>(y, x_+1), img.at<uchar>(y, x_+2) );
-			arr[y][x] =  img.at<uchar>(y, x_  )       |
-				        (img.at<uchar>(y, x_+1) << 8) |
-						(img.at<uchar>(y, x_+2) << 16);
-			//printf("arr:%x\n", arr[y][x]);
-			//system("PAUSE");
-			x_+=3;
-		}
-	}
+	
 	return arr;
 }
+int **map_1d_arr_to_2d_arr(int *arr, int h, int w){
+	int **arr_2d = new int*[h];
+	for(int y=0 ; y<h ; y++){
+		int offset = y * w;
+		arr_2d[y] = &arr[offset];
+	}
+	return arr_2d;
+}
+
 uchar **int_2d_arr_to_gray_arr(int **color_arr, int h, int w){
 	uchar **arr = new_2d_arr<uchar>(h, w);
 	uchar *color = new uchar[3];

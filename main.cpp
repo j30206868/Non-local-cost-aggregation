@@ -19,6 +19,83 @@
 const char* LeftIMGName  = "face/face1.png"; 
 const char* RightIMGName = "face/face2.png";
 
+const char *getErrorString(cl_int error)
+{
+switch(error){
+    // run-time and JIT compiler errors
+    case 0: return "CL_SUCCESS";
+    case -1: return "CL_DEVICE_NOT_FOUND";
+    case -2: return "CL_DEVICE_NOT_AVAILABLE";
+    case -3: return "CL_COMPILER_NOT_AVAILABLE";
+    case -4: return "CL_MEM_OBJECT_ALLOCATION_FAILURE";
+    case -5: return "CL_OUT_OF_RESOURCES";
+    case -6: return "CL_OUT_OF_HOST_MEMORY";
+    case -7: return "CL_PROFILING_INFO_NOT_AVAILABLE";
+    case -8: return "CL_MEM_COPY_OVERLAP";
+    case -9: return "CL_IMAGE_FORMAT_MISMATCH";
+    case -10: return "CL_IMAGE_FORMAT_NOT_SUPPORTED";
+    case -11: return "CL_BUILD_PROGRAM_FAILURE";
+    case -12: return "CL_MAP_FAILURE";
+    case -13: return "CL_MISALIGNED_SUB_BUFFER_OFFSET";
+    case -14: return "CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST";
+    case -15: return "CL_COMPILE_PROGRAM_FAILURE";
+    case -16: return "CL_LINKER_NOT_AVAILABLE";
+    case -17: return "CL_LINK_PROGRAM_FAILURE";
+    case -18: return "CL_DEVICE_PARTITION_FAILED";
+    case -19: return "CL_KERNEL_ARG_INFO_NOT_AVAILABLE";
+
+    // compile-time errors
+    case -30: return "CL_INVALID_VALUE";
+    case -31: return "CL_INVALID_DEVICE_TYPE";
+    case -32: return "CL_INVALID_PLATFORM";
+    case -33: return "CL_INVALID_DEVICE";
+    case -34: return "CL_INVALID_CONTEXT";
+    case -35: return "CL_INVALID_QUEUE_PROPERTIES";
+    case -36: return "CL_INVALID_COMMAND_QUEUE";
+    case -37: return "CL_INVALID_HOST_PTR";
+    case -38: return "CL_INVALID_MEM_OBJECT";
+    case -39: return "CL_INVALID_IMAGE_FORMAT_DESCRIPTOR";
+    case -40: return "CL_INVALID_IMAGE_SIZE";
+    case -41: return "CL_INVALID_SAMPLER";
+    case -42: return "CL_INVALID_BINARY";
+    case -43: return "CL_INVALID_BUILD_OPTIONS";
+    case -44: return "CL_INVALID_PROGRAM";
+    case -45: return "CL_INVALID_PROGRAM_EXECUTABLE";
+    case -46: return "CL_INVALID_KERNEL_NAME";
+    case -47: return "CL_INVALID_KERNEL_DEFINITION";
+    case -48: return "CL_INVALID_KERNEL";
+    case -49: return "CL_INVALID_ARG_INDEX";
+    case -50: return "CL_INVALID_ARG_VALUE";
+    case -51: return "CL_INVALID_ARG_SIZE";
+    case -52: return "CL_INVALID_KERNEL_ARGS";
+    case -53: return "CL_INVALID_WORK_DIMENSION";
+    case -54: return "CL_INVALID_WORK_GROUP_SIZE";
+    case -55: return "CL_INVALID_WORK_ITEM_SIZE";
+    case -56: return "CL_INVALID_GLOBAL_OFFSET";
+    case -57: return "CL_INVALID_EVENT_WAIT_LIST";
+    case -58: return "CL_INVALID_EVENT";
+    case -59: return "CL_INVALID_OPERATION";
+    case -60: return "CL_INVALID_GL_OBJECT";
+    case -61: return "CL_INVALID_BUFFER_SIZE";
+    case -62: return "CL_INVALID_MIP_LEVEL";
+    case -63: return "CL_INVALID_GLOBAL_WORK_SIZE";
+    case -64: return "CL_INVALID_PROPERTY";
+    case -65: return "CL_INVALID_IMAGE_DESCRIPTOR";
+    case -66: return "CL_INVALID_COMPILER_OPTIONS";
+    case -67: return "CL_INVALID_LINKER_OPTIONS";
+    case -68: return "CL_INVALID_DEVICE_PARTITION_COUNT";
+
+    // extension errors
+    case -1000: return "CL_INVALID_GL_SHAREGROUP_REFERENCE_KHR";
+    case -1001: return "CL_PLATFORM_NOT_FOUND_KHR";
+    case -1002: return "CL_INVALID_D3D10_DEVICE_KHR";
+    case -1003: return "CL_INVALID_D3D10_RESOURCE_KHR";
+    case -1004: return "CL_D3D10_RESOURCE_ALREADY_ACQUIRED_KHR";
+    case -1005: return "CL_D3D10_RESOURCE_NOT_ACQUIRED_KHR";
+    default: return "Unknown OpenCL error";
+    }
+}
+
 cl_program load_program(cl_context context, const char* filename)
 {
 	std::ifstream in(filename, std::ios_base::binary);
@@ -48,33 +125,6 @@ cl_program load_program(cl_context context, const char* filename)
 	}
 
 	return program;
-}
-
-void compute_gradient(float*gradient, uchar **gray_image, int h, int w)
-{
-	float gray,gray_minus,gray_plus;
-	int node_idx = 0;
-	for(int y=0;y<h;y++)
-	{
-		gray_minus=gray_image[y][0];
-		gray=gray_plus=gray_image[y][1];
-		gradient[node_idx]=gray_plus-gray_minus+127.5;
-
-		node_idx++;
-
-		for(int x=1;x<w-1;x++)
-		{
-			gray_plus=gray_image[y][x+1];
-			gradient[node_idx]=0.5*(gray_plus-gray_minus)+127.5;
-
-			gray_minus=gray;
-			gray=gray_plus;
-			node_idx++;
-		}
-		
-		gradient[node_idx]=gray_plus-gray_minus+127.5;
-		node_idx++;
-	}
 }
 
 cl_device_id setup_opencl(cl_context &context, cl_int &err){
@@ -114,7 +164,7 @@ cl_device_id setup_opencl(cl_context &context, cl_int &err){
 int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &program, cl_int &err, 
 						cl_match_elem *left_cwz_img, cl_match_elem *right_cwz_img, float *matching_result, int h, int w, int match_result_len){
 	cl_kernel matcher = clCreateKernel(program, "matching_cost", 0);
-	if(matcher == 0) { std::cerr << "Can't load kernel\n"; clReleaseProgram(program); clReleaseContext(context); return 0; }
+	if(matcher == 0) { std::cerr << "Can't load matching_cost kernel\n"; return 0; }
 
 	match_info *info = (match_info *) malloc(sizeof(info));
 	info->img_width = w; info->max_d = disparityLevel;
@@ -135,14 +185,12 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 	   cl_r_rgb == 0 || cl_r_gradient == 0 ||
 	   cl_match_result == 0) {
 		std::cerr << "Can't create OpenCL buffer\n";
-		clReleaseProgram(program);
 		clReleaseKernel(matcher);
 		clReleaseMemObject(cl_l_rgb);
 		clReleaseMemObject(cl_l_gradient);
 		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
-		clReleaseContext(context);
 		return 0;
 	}
 
@@ -157,13 +205,11 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 	if(queue == 0) {
 		std::cerr << "Can't create command queue\n";
 		clReleaseKernel(matcher);
-		clReleaseProgram(program);
 		clReleaseMemObject(cl_l_rgb);
 		clReleaseMemObject(cl_l_gradient);
 		clReleaseMemObject(cl_r_rgb);
 		clReleaseMemObject(cl_r_gradient);
 		clReleaseMemObject(cl_match_result);
-		clReleaseContext(context);
 		return 0;
 	}
 	printf("Setup kernel Time: %.6fs\n", double(clock() - step_up_kernel_s) / CLOCKS_PER_SEC);
@@ -186,19 +232,96 @@ int apply_cl_cost_match(cl_context &context, cl_device_id &device, cl_program &p
 	}
 
 	clReleaseKernel(matcher);
-	clReleaseProgram(program);
 	clReleaseMemObject(cl_l_rgb);
 	clReleaseMemObject(cl_l_gradient);
 	clReleaseMemObject(cl_r_rgb);
 	clReleaseMemObject(cl_r_gradient);
 	clReleaseMemObject(cl_match_result);
 	clReleaseCommandQueue(queue);
-	clReleaseContext(context);
+	
 	return 1;
+}
+
+template<class T>
+T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program &program, cl_int &err,
+						   T *color_1d_arr, int node_c, int h, int w){
+	cl_kernel mdf_kernel;
+	if(eqTypes<int, T>()){
+		mdf_kernel = clCreateKernel(program, "MedianFilterBitonic", 0);
+		if(mdf_kernel == 0) { std::cerr << "Can't load MedianFilterBitonic kernel\n"; return 0; }
+	}else if(eqTypes<uchar, T>()){
+		mdf_kernel = clCreateKernel(program, "MedianFilterGrayScale", 0);
+		if(mdf_kernel == 0) { std::cerr << "Can't load MedianFilterGrayScale kernel\n"; return 0; }
+	}else{
+		return 0;
+	}
+	cl_mem cl_arr = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T) * node_c, color_1d_arr, NULL);
+	cl_mem cl_result = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(T) * node_c, NULL, NULL);
+
+	if(cl_arr == 0 || cl_result == 0) {
+		std::cerr << "Can't create OpenCL buffer for median filter\n";
+		clReleaseKernel(mdf_kernel);
+		clReleaseMemObject(cl_arr);
+		clReleaseMemObject(cl_result);
+		return 0;
+	}
+
+	clSetKernelArg(mdf_kernel, 0, sizeof(cl_mem), &cl_arr);
+	clSetKernelArg(mdf_kernel, 1, sizeof(cl_mem), &cl_result);
+
+	cl_command_queue queue = clCreateCommandQueue(context, device, 0, 0);
+	if(queue == 0) {
+		std::cerr << "Can't create command queue for median filter\n";
+		clReleaseKernel(mdf_kernel);
+		clReleaseMemObject(cl_arr);
+		clReleaseMemObject(cl_result);
+		return 0;
+	}
+
+	T *result_arr = new T[node_c];
+
+	size_t offset_size[2] = {0,0};
+	size_t work_size[2] = {w, h};
+	clock_t tOfCLStart = clock();
+    /* Do your stuff here */
+	err = clEnqueueNDRangeKernel(queue, mdf_kernel, 2, offset_size, work_size, 0, 0, 0, 0);
+
+	if(err == CL_SUCCESS) {
+		err = clEnqueueReadBuffer(queue, cl_result, CL_TRUE, 0, sizeof(T) * node_c, &result_arr[0], 0, 0, 0);
+	}
+	printf("MDF Time taken: %.6fs\n", (double)(clock() - tOfCLStart)/CLOCKS_PER_SEC);
+
+	if(err != CL_SUCCESS)  {
+		std::cout << getErrorString(err) << std::endl;
+		std::cerr << "Can't run kernel or read back data for median filter\n";
+		delete[] result_arr;
+		clReleaseKernel(mdf_kernel);
+		clReleaseMemObject(cl_arr);
+		clReleaseMemObject(cl_result);
+		clReleaseCommandQueue(queue);
+		return 0;
+	}
+
+	clReleaseKernel(mdf_kernel);
+	clReleaseMemObject(cl_arr);
+	clReleaseMemObject(cl_result);
+	clReleaseCommandQueue(queue);
+
+	return result_arr;
 }
 
 int main()
 {
+	/*******************************************************
+							 OpenCL
+	*******************************************************/
+	cl_int err;
+	cl_context context;
+	cl_device_id device = setup_opencl(context, err);
+
+	cl_program program = load_program(context, "test.cl");
+	if(program == 0) { std::cerr << "Can't load or build program\n"; clReleaseContext(context); return 0; }
+
 	//cv::Mat ppmimg = cv::imread("hand.ppm");
 	//cv::imwrite("hand_mst_no_ctmf.bmp", ppmimg);
 
@@ -207,8 +330,7 @@ int main()
 	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
 
 	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
-    if( fs.isOpened() == false)
-    {
+    if( fs.isOpened() == false){
         printf( "No More....Quitting...!" );
         return 0;
     }
@@ -244,17 +366,26 @@ int main()
 
 	int w = left.cols;
 	int h = left.rows;
+	int node_c = w * h;
+	
+	int *left_color_1d_arr  = c3_mat_to_1d_int_arr(left , h, w);
+	int *right_color_1d_arr = c3_mat_to_1d_int_arr(right, h, w);
+	float *left_1d_gradient  = new float[node_c];
+	float *right_1d_gradient = new float[node_c];
 
-	int **left_color_arr = c3_mat_to_2d_int_arr(left, left.rows, left.cols);
-	int **right_color_arr = c3_mat_to_2d_int_arr(right, right.rows, right.cols);
+	int *left_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, left_color_1d_arr, node_c, h, w);
+	int *right_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, right_color_1d_arr, node_c, h, w);
 
+	int **left_color_arr  = map_1d_arr_to_2d_arr(left_color_mdf_1d_arr , h, w);
+	int **right_color_arr = map_1d_arr_to_2d_arr(right_color_mdf_1d_arr, h, w);
+
+	cl_match_elem *left_cwz_img  = new cl_match_elem(node_c, left_color_1d_arr , left_1d_gradient );
+	cl_match_elem *right_cwz_img = new cl_match_elem(node_c, right_color_1d_arr, right_1d_gradient);
+	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
+	
 	uchar **left_gray_arr  = int_2d_arr_to_gray_arr(left_color_arr, h, w);
 	uchar **right_gray_arr = int_2d_arr_to_gray_arr(right_color_arr, h, w);
 
-	cl_match_elem *left_cwz_img  = cvmat_colorimg_to_match_elem(left_color_arr, h, w);
-	cl_match_elem *right_cwz_img = cvmat_colorimg_to_match_elem(right_color_arr, h, w);
-	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
-	
 	compute_gradient(left_cwz_img->gradient , left_gray_arr, h, w);
 	compute_gradient(right_cwz_img->gradient, right_gray_arr, h, w);
 
@@ -266,15 +397,8 @@ int main()
 	float *matching_result = new float[match_result_len];
 
 	/*******************************************************
-							 OpenCL
+							Matching cost
 	*******************************************************/
-	cl_int err;
-	cl_context context;
-	cl_device_id device = setup_opencl(context, err);
-
-	cl_program program = load_program(context, "test.cl");
-	if(program == 0) { std::cerr << "Can't load or build program\n"; clReleaseContext(context); return 0; }
-
 	if( !apply_cl_cost_match(context, device, program, err, 
 						left_cwz_img, right_cwz_img, matching_result, h, w, match_result_len) )
 	{ printf("apply_cl_cost_match failed.\n"); }
@@ -302,12 +426,28 @@ int main()
 
 	ca->pickBestDepthForNodeList();
 
-	//ca->showDisparityMap();
-	cv::Mat dMap(h, w, CV_8U);
+	uchar *best_disparity = new uchar[node_c];
+	int idx = 0;
 	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
 	{
-		dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
+		best_disparity[idx] = (uchar)nodeList[y][x].dispairty;
+		idx++;
 	}
+	uchar *final_dmap;
+	if( !(final_dmap = apply_cl_color_img_mdf<uchar>(context, device, program, err, best_disparity, node_c, h, w)) ){
+		printf("dmap median filtering failed.\n");
+		return 0;
+	}
+	//ca->showDisparityMap();
+	cv::Mat dMap(h, w, CV_8U);
+	idx = 0;
+	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
+	{
+		//dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
+		dMap.at<uchar>(y,x) = final_dmap[idx] * (double) IntensityLimit / (double)disparityLevel;
+		idx++;
+	}
+	//
 
 	//readDisparityFromFile("disparity.txt", h, w, dMap);
 
@@ -317,6 +457,9 @@ int main()
 	cv::waitKey(0);
 
 	system("PAUSE");
+
+	clReleaseProgram(program);
+	clReleaseContext(context);
 
 	return 0;
 }

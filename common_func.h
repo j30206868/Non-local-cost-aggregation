@@ -9,7 +9,11 @@ struct cl_match_elem{
 	int *rgb;
 	float *gradient;
 	int node_c;
-	
+	cl_match_elem(int _node_c, int *_rgb, float *_gradient){
+		this->node_c = _node_c;
+		this->rgb      = _rgb;
+		this->gradient = _gradient;
+	}
 	cl_match_elem(int _node_c){
 		this->node_c = _node_c;
 		this->rgb      = new int[node_c];
@@ -69,7 +73,6 @@ void free_3d_arr(T ***arr, int h, int w, int b)
 	delete[] arr;
 }
 
-cl_match_elem *cvmat_colorimg_to_match_elem(int **color_arr, int h, int w);
 
 //±Nformat string¤Á¦¨°}¦C
 int closestDelimiterPosi(std::string str, std::string *delimiters, int delCount, int &delLength);
@@ -80,7 +83,26 @@ float *splitDataContent(std::string str, std::string delimiter, int &length);
 float *readMatchCostFromFile(std::string fname, int h, int w, int max_disparity, float *my_match_cost);
 void readDisparityFromFile(std::string fname, int h, int w, cv::Mat &dMap);
 
-int **c3_mat_to_2d_int_arr(cv::Mat img, int h, int w);
+int *c3_mat_to_1d_int_arr(cv::Mat img, int h, int w);
+int **map_1d_arr_to_2d_arr(int *arr, int h, int w);
+
 uchar **int_2d_arr_to_gray_arr(int **color_arr, int h, int w);
 inline uchar rgb_2_gray(uchar*in){return(uchar(0.299*in[0]+0.587*in[1]+0.114*in[2]+0.5));}
+
+//check if type equals
+template<typename T, typename U>
+struct is_same
+{
+    static const bool value = false;
+};
+
+template<typename T>
+struct is_same<T, T>
+{
+    static const bool value = true;
+};
+
+template<typename T, typename U>
+bool eqTypes() { return is_same<T, U>::value; }
+
 #endif //CWZ_COMMON_FUNC_H
