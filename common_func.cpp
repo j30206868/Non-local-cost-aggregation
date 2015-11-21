@@ -173,14 +173,6 @@ int *c3_mat_to_1d_int_arr(cv::Mat img, int h, int w){
 	
 	return arr;
 }
-int **map_1d_arr_to_2d_arr(int *arr, int h, int w){
-	int **arr_2d = new int*[h];
-	for(int y=0 ; y<h ; y++){
-		int offset = y * w;
-		arr_2d[y] = &arr[offset];
-	}
-	return arr_2d;
-}
 
 uchar **int_2d_arr_to_gray_arr(int **color_arr, int h, int w){
 	uchar **arr = new_2d_arr<uchar>(h, w);
@@ -195,6 +187,22 @@ uchar **int_2d_arr_to_gray_arr(int **color_arr, int h, int w){
 		color[1] = (color_arr[y][x]&mask_g >> 8);
 		color[0] = (color_arr[y][x]&mask_r >> 16);
 		arr[y][x] = rgb_2_gray( color );
+	}
+	delete[] color;
+	return arr;
+}
+uchar *int_1d_arr_to_gray_arr(int *color_arr, int node_c){
+	uchar *arr = new uchar[node_c];
+	uchar *color = new uchar[3];
+	int mask_b = 0xFF;
+	int mask_g = mask_b << 8;
+	int mask_r = mask_g << 8;
+	for(int i=0; i<node_c ; i++)
+	{
+		color[2] = (color_arr[i]&mask_b);
+		color[1] = (color_arr[i]&mask_g >> 8);
+		color[0] = (color_arr[i]&mask_r >> 16);
+		arr[i] = rgb_2_gray( color );
 	}
 	delete[] color;
 	return arr;

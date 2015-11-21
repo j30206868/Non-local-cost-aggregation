@@ -24,6 +24,9 @@
     <ClCompile Include="common_func.cpp">
       <Filter>原始程式檔</Filter>
     </ClCompile>
+    <ClCompile Include="cwz_mst.cpp">
+      <Filter>原始程式檔</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="test.cl">
@@ -38,7 +41,10 @@
       <Filter>標頭檔</Filter>
     </ClInclude>
     <ClInclude Include="cl_data_type.h">
-      <Filter>原始程式檔</Filter>
+      <Filter>標頭檔</Filter>
+    </ClInclude>
+    <ClInclude Include="cwz_mst.h">
+      <Filter>標頭檔</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

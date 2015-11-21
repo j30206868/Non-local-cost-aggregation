@@ -21,6 +21,14 @@ struct cl_match_elem{
 	}
 };
 
+template <class T>T *new_1d_arr(int len, T init_value){
+	T *arr = new T[len];
+	for(int i=0; i<len; i++){
+		arr[i] = init_value;
+	}
+	return arr;
+}
+
 template <class T>T **new_2d_arr(int rows, int cols, T init_value){
 	T **arr = new T*[rows];
 	for(int i=0; i<rows; i++){
@@ -84,9 +92,18 @@ float *readMatchCostFromFile(std::string fname, int h, int w, int max_disparity,
 void readDisparityFromFile(std::string fname, int h, int w, cv::Mat &dMap);
 
 int *c3_mat_to_1d_int_arr(cv::Mat img, int h, int w);
-int **map_1d_arr_to_2d_arr(int *arr, int h, int w);
+template<class T>
+T **map_1d_arr_to_2d_arr(T *arr, int h, int w){
+	T **arr_2d = new T*[h];
+	for(int y=0 ; y<h ; y++){
+		int offset = y * w;
+		arr_2d[y] = &arr[offset];
+	}
+	return arr_2d;
+}
 
 uchar **int_2d_arr_to_gray_arr(int **color_arr, int h, int w);
+uchar *int_1d_arr_to_gray_arr(int *color_arr, int node_c);
 inline uchar rgb_2_gray(uchar*in){return(uchar(0.299*in[0]+0.587*in[1]+0.114*in[2]+0.5));}
 
 //check if type equals
