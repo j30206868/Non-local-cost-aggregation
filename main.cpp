@@ -252,6 +252,7 @@ T *apply_cl_color_img_mdf(cl_context &context, cl_device_id &device, cl_program 
 int main()
 {
 	cwz_mst mst;
+	//mst.test_correctness();
 
 	/*******************************************************
 							 OpenCL
@@ -267,10 +268,10 @@ int main()
 	//cv::imwrite("hand_mst_no_ctmf.bmp", ppmimg);
 
 	//build MST
-	//cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
-	//cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
+	cv::Mat left = cv::imread(LeftIMGName, CV_LOAD_IMAGE_COLOR);
+	cv::Mat right = cv::imread(RightIMGName, CV_LOAD_IMAGE_COLOR);
 
-	cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
+	/*cv::FileStorage fs("imageLR.xml", cv::FileStorage::READ);
     if( fs.isOpened() == false){
         printf( "No More....Quitting...!" );
         return 0;
@@ -314,18 +315,22 @@ int main()
 	float *left_1d_gradient  = new float[node_c];
 	float *right_1d_gradient = new float[node_c];
 
-	int *left_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, left_color_1d_arr, node_c, h, w);
-	int *right_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, right_color_1d_arr, node_c, h, w);
+	//int *left_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, left_color_1d_arr, node_c, h, w);
+	//int *right_color_mdf_1d_arr = apply_cl_color_img_mdf<int>(context, device, program, err, right_color_1d_arr, node_c, h, w);
 
-	int **left_color_arr  = map_1d_arr_to_2d_arr<int>(left_color_mdf_1d_arr , h, w);
-	int **right_color_arr = map_1d_arr_to_2d_arr<int>(right_color_mdf_1d_arr, h, w);
+	//int **left_color_arr  = map_1d_arr_to_2d_arr<int>(left_color_mdf_1d_arr , h, w);
+	//int **right_color_arr = map_1d_arr_to_2d_arr<int>(right_color_mdf_1d_arr, h, w);
+	int **left_color_arr  = map_1d_arr_to_2d_arr<int>(left_color_1d_arr , h, w);
+	int **right_color_arr = map_1d_arr_to_2d_arr<int>(right_color_1d_arr, h, w);
 
 	cl_match_elem *left_cwz_img  = new cl_match_elem(node_c, left_color_1d_arr , left_1d_gradient );
 	cl_match_elem *right_cwz_img = new cl_match_elem(node_c, right_color_1d_arr, right_1d_gradient);
 	printf("陣列init花費時間: %fs\n", double(clock() - img_init_s) / CLOCKS_PER_SEC);
 	
-	uchar *left_gray_1d_arr  = int_1d_arr_to_gray_arr(left_color_mdf_1d_arr , node_c);
-	uchar *right_gray_1d_arr = int_1d_arr_to_gray_arr(right_color_mdf_1d_arr, node_c);
+	//uchar *left_gray_1d_arr  = int_1d_arr_to_gray_arr(left_color_mdf_1d_arr , node_c);
+	//uchar *right_gray_1d_arr = int_1d_arr_to_gray_arr(right_color_mdf_1d_arr, node_c);
+	uchar *left_gray_1d_arr  = int_1d_arr_to_gray_arr(left_color_1d_arr , node_c);
+	uchar *right_gray_1d_arr = int_1d_arr_to_gray_arr(right_color_1d_arr, node_c);
 
 	uchar **left_gray_2d_arr  = map_1d_arr_to_2d_arr<uchar>(left_gray_1d_arr, h, w);
 	uchar **right_gray_2d_arr = map_1d_arr_to_2d_arr<uchar>(right_gray_1d_arr, h, w);
@@ -333,15 +338,10 @@ int main()
 	compute_gradient(left_cwz_img->gradient , left_gray_2d_arr , h, w);
 	compute_gradient(right_cwz_img->gradient, right_gray_2d_arr, h, w);
 
-	SGNode **nodeList = SGNode::createSGNodeList(w, h);
-
 	mst.init(h, w, 1);
 	mst.set_img(left_gray_1d_arr);
 
 	mst.profile_mst();
-	system("PAUSE");
-
-	CostAggregator *ca = new CostAggregator(nodeList, w, h);
 
 	int match_result_len = h * w * disparityLevel;
 	float *matching_result = new float[match_result_len];
@@ -353,47 +353,23 @@ int main()
 						left_cwz_img, right_cwz_img, matching_result, h, w, match_result_len) )
 	{ printf("apply_cl_cost_match failed.\n"); }
 
-	int mr_idx = 0;
-	for(int y=0 ; y<h ; y++)
-	for(int x=0 ; x<w ; x++)
-	for(int d=0 ; d<disparityLevel ; d++)
-	{
-		nodeList[y][x].agtCost[d] = matching_result[mr_idx];
-		mr_idx++;
-	}
+	time_t cost_agt_t = clock();
+	mst.cost_agt(matching_result);
+	uchar *best_disparity = mst.pick_best_dispairty();
+	printf("cost_agt_t: %fs\n", double(clock()-cost_agt_t) / CLOCKS_PER_SEC);
 
-	//已經驗正matching cost的結果是一樣的
-	//matching_result = readMatchCostFromFile("cost.txt", h, w, disparityLevel, matching_result);
-
-	//Keep doing MST
-	SGECostNode **cList = buildCostListFromCV(nodeList, left_gray_2d_arr, w, h);
-	addMSTEdgeToNodeList(nodeList, cList, IntensityLimit, w, h);
-	//Aggregation
-	ca->upwardAggregation(w/2, h/2, -1);
-	printf("count:%d total weight:%d\n", ca->totalWeight, ca->MSTWeight);
-
-	ca->downwardAggregation(w/2, h/2, -1);
-
-	ca->pickBestDepthForNodeList();
-
-	uchar *best_disparity = new uchar[node_c];
-	int idx = 0;
-	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
-	{
-		best_disparity[idx] = (uchar)nodeList[y][x].dispairty;
-		idx++;
-	}
-	uchar *final_dmap;
+	/*uchar *final_dmap;
 	if( !(final_dmap = apply_cl_color_img_mdf<uchar>(context, device, program, err, best_disparity, node_c, h, w)) )
-	{ printf("dmap median filtering failed.\n"); return 0; }
+	{ printf("dmap median filtering failed.\n"); return 0; }*/
 	
 	//ca->showDisparityMap();
 	cv::Mat dMap(h, w, CV_8U);
-	idx = 0;
+	int idx = 0;
 	for(int y=0 ; y<h ; y++) for(int x=0 ; x<w ; x++)
 	{
 		//dMap.at<uchar>(y,x) = nodeList[y][x].dispairty * (double) IntensityLimit / (double)disparityLevel;
-		dMap.at<uchar>(y,x) = final_dmap[idx];// * (double) IntensityLimit / (double)disparityLevel;
+		//dMap.at<uchar>(y,x) = final_dmap[idx];// * (double) IntensityLimit / (double)disparityLevel;
+		dMap.at<uchar>(y,x) = best_disparity[idx];
 		idx++;
 	}
 	//

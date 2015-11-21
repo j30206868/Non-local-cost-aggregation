@@ -173,14 +173,13 @@ void cwz_mst::build_tree(){
 
 			child_node_list[parent_id][ child_node_num[parent_id]++ ] = possible_child_id;
 
-			if( node_conn_node_num[possible_child_id] > 0 )
+			if( node_conn_node_num[possible_child_id] > 1)//definitely has one edge connect to parent(num eq 1 is a leaf node)
 				push(possible_child_id, id_stack, id_stack_e);
 		}
 	}
 }
 //
 void cwz_mst::cost_agt(float *match_cost_result){
-	
 	//up agt
 	for(int i = node_amt-1 ; i >= 0 ; i--){
 		int node_i = node_idx_from_p_to_c[i];
@@ -188,16 +187,27 @@ void cwz_mst::cost_agt(float *match_cost_result){
 
 		for(int d=0 ; d<disparityLevel ; d++)
 			agt_result[ node_disparity_i+d ] = match_cost_result[ node_disparity_i+d ];
+			//printf("agt_result[%2d] agt:%f\n", node_disparity_i, agt_result[ node_disparity_i ]);
 
 		for(int child_c=0 ; child_c < child_node_num[node_i] ; child_c++){
 			int child_i = child_node_list[node_i][child_c];
 			int child_disparity_i = child_i * disparityLevel;
 
 			for(int d=0 ; d<disparityLevel ; d++){
+				//printf("	node_agt[%2d]:%f + child_agt[%2d]:%f * w[%2d]:%f = ", node_disparity_i, agt_result[ node_disparity_i ], child_disparity_i, agt_result[ child_disparity_i+d ], child_i, whistogram[ node_weight[child_i] ]);
 				agt_result[ node_disparity_i+d ] += agt_result[ child_disparity_i+d ] * whistogram[ node_weight[child_i] ];
+				//printf("agt_result[%2d]:%f\n", node_disparity_i, agt_result[ node_disparity_i+d ]);
 			}
 		}
 	}
+	/*for(int i=0 ; i<node_amt ; i++){
+		int i_ = i*disparityLevel;
+		for(int d=0 ; d<disparityLevel ; d++){
+			printf("[%3d][%3d]: %f\n", i, d, agt_result[i_ + d]);
+			system("PAUSE");
+		}
+	}*/
+	//printf("downward agt:\n");
 	//down agt
 	for(int i=1 ; i<node_amt ; i++){
 		int node_i = node_idx_from_p_to_c[i];
@@ -209,8 +219,11 @@ void cwz_mst::cost_agt(float *match_cost_result){
 		float one_m_sqw = (1.0 - w * w);
 
 		for(int d=0 ; d<disparityLevel ; d++){
-			agt_result[node_disparity_i+d] = w           * agt_result[ parent_disparity_i+d ] +
-											 (one_m_sqw) * agt_result[node_disparity_i+d];
+			//printf("node[%2d]:w[%2d]:%f * agt[%2d]:%f +\n", node_i, node_i, w, parent_disparity_i, agt_result[ parent_disparity_i+d ]);
+			//printf("          one_m_sqw:%f * agt[%2d]:%f = ", one_m_sqw, node_disparity_i, agt_result[node_disparity_i+d]);
+			agt_result[node_disparity_i+d] = w         * agt_result[ parent_disparity_i+d ] +
+											 one_m_sqw * agt_result[node_disparity_i+d];
+			//printf("agt[%2d]:%f\n", node_disparity_i+d, agt_result[node_disparity_i+d]);
 		}
 	}
 }
@@ -221,8 +234,10 @@ TEleUnit *cwz_mst::pick_best_dispairty(){
 		float min_cost = agt_result[i_+0];
 		best_disparity[i] = 0;
 		for(int d=1 ; d<disparityLevel ; d++){
-			if( agt_result[i_+d] < min_cost)
+			if( agt_result[i_+d] < min_cost ){
 				best_disparity[i] = d;
+				min_cost = agt_result[i_+d];
+			}
 		}
 	}
 	return best_disparity;
@@ -271,6 +286,8 @@ void cwz_mst::profile_mst(){
 		int total_w = 0;
 		for(int i=0 ; i<this->node_amt ; i++){
 			total_w += node_weight[i];
+			//printf("[%3d]weight:%d\n", i, node_weight[i]);
+			//system("PAUSE");
 		}
 		printf("     node_amt: %d nodes\n", node_amt);
 		printf(" total weight: %d\n", total_w);
@@ -307,6 +324,11 @@ void cwz_mst::test_correctness(){
 		this->kruskal_mst();
 		this->build_tree();
 
+		float *match_cost = new float[node_c];
+		match_cost[0] = 0;	match_cost[1] =  1;	match_cost[2] = 2;
+		match_cost[3] = 3;	match_cost[4] =  4;	match_cost[5] = 5;
+		match_cost[6] = 6;	match_cost[7] =  7;	match_cost[8] = 8;
+
 		printf("node_idx_from_p_to_c: \n");
 		for(int i=0 ; i<node_c ; i++){
 			printf("	node_idx_from_p_to_c[%2d]: %2d\n", i, node_idx_from_p_to_c[i]);
@@ -315,7 +337,37 @@ void cwz_mst::test_correctness(){
 		for(int i=0 ; i<node_c ; i++){
 			printf("	node_weight[%2d]: %2d\n", i, node_weight[i]);
 		}
+		printf("node_parent_id: \n");
+		for(int i=0 ; i<node_c ; i++){
+			printf("	node_parent_id[%2d]: %2d\n", i, node_parent_id[i]);
+		}
+		printf("child_node_list upward: \n");
+		for(int i = node_amt-1 ; i >= 0 ; i--){
+			int node_i = node_idx_from_p_to_c[i];
+			printf("	node[%2d]:\n", node_i);
+			for(int child_c=0 ; child_c < child_node_num[node_i] ; child_c++){
+				int child_i = child_node_list[node_i][child_c];
+				printf("		child[%2d]\n", child_i);
+			}
+		}
+		printf("child_node_list downward: \n");
+		for(int i=1 ; i<node_amt ; i++){
+			int node_i = node_idx_from_p_to_c[i];
+			int parent_i = node_parent_id[node_i];
 
+			printf("	node[%2d]:\n", node_i);
+			printf("		parent[%2d]\n", parent_i);
+		}
+		printf("whistogram:\n");
+		for(int i = 0 ; i < node_amt ; i++){
+			printf("node[%2d].histogram[w:%3d] = %f\n",i, node_weight[i], whistogram[ node_weight[i] ]);
+		}
+		this->cost_agt(match_cost);
+		/*printf("agt_result:\n");
+		for(int i = 0 ; i < node_amt ; i++){
+			printf("node[%2d] agt:%f\n", i, agt_result);
+		}*/
+		/*
 		//reuse test
 		printf("--	--	reuseness test	--	--\n");
 		arr[0] = 255;	arr[1] = 254;	arr[2] =   0;
@@ -325,16 +377,7 @@ void cwz_mst::test_correctness(){
 		this->build_edges();
 		this->counting_sort();
 		this->kruskal_mst();
-		this->build_tree();
-		printf("node_idx_from_p_to_c: \n");
-		for(int i=0 ; i<node_c ; i++){
-			printf("	node_idx_from_p_to_c[%2d]: %2d\n", i, node_idx_from_p_to_c[i]);
-		}
-		printf("weights: \n");
-		for(int i=0 ; i<node_c ; i++){
-			printf("	node_weight[%2d]: %2d\n", i, node_weight[i]);
-		}
-
+		this->build_tree();*/
 		//free memory
 
 		printf("\n*********************************************\n");
