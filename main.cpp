@@ -338,9 +338,7 @@ int main()
 	mst.init(h, w, 1);
 	mst.set_img(left_gray_1d_arr);
 
-	time_t start_mst_t = clock();
 	mst.profile_mst();
-	printf("Solve mst take: %fs\n", double(clock() - start_mst_t) / CLOCKS_PER_SEC);
 	system("PAUSE");
 
 	CostAggregator *ca = new CostAggregator(nodeList, w, h);

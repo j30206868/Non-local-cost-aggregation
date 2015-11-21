@@ -1,5 +1,7 @@
 #include "cwz_mst.h"
 
+float cwz_mst::sigma = 0.1;
+
 inline int get_1d_idx_from_2d(int x, int y, int w){
 	return y * w + x;
 }
@@ -20,11 +22,6 @@ inline void addEdge(TEleUnit *img, int **edge_node_list, short *distance, int ed
 		printf("cwz_mst addEdge(...): channel is not equal to 1 nor 3.\n");
 		system("PAUSE");
 	}
-}
-inline int getNodeParentG(int *node_group, int i ){
-	int p = i;
-	while(node_group[p] != p){	p = node_group[p];  }
-	return p;
 }
 inline void push(int id_in, int *stack, int &end){
 	end++;
@@ -61,11 +58,19 @@ void cwz_mst::init(int _h, int _w, int _ch){
 	this->id_stack_e = -1;
 	this->node_parent_id = new_1d_arr<int>(this->edge_amt, -1);
 	//最終要使用的 tree 結構
+	this->child_node_num = new_1d_arr<int>(this->node_amt, 0);
 	this->child_node_list = new_2d_arr<int>( this->node_amt, 4, -1);
 	this->node_idx_from_p_to_c= new_1d_arr(this->node_amt, -1);
 	this->node_weight = new int[this->node_amt];
 
 	for(int i=0 ; i<IntensityLimit ; i++){ histogram[i] = 0; }
+
+	this->agt_result = new float[ node_amt * disparityLevel ];
+	this->best_disparity = new TEleUnit[node_amt];
+
+	for(int i=0 ; i<IntensityLimit ; i++){
+		whistogram[i] = exp(-double(i) / (cwz_mst::sigma * (IntensityLimit - 1)));
+	}
 
 	this->isInit = true;
 }
@@ -113,6 +118,12 @@ void cwz_mst::counting_sort(){
 		cost_sorted_edge_idx[ deserved_order ] = i;
 	}
 }
+int  cwz_mst::findset(int i){
+	if(node_group[i] != i){
+		node_group[i] = findset(node_group[i]);
+	}
+	return node_group[i];
+}
 void cwz_mst::kruskal_mst(){
 	for(int i=0 ; i<edge_amt ; i++){
 		int edge_idx = cost_sorted_edge_idx[i];
@@ -120,8 +131,8 @@ void cwz_mst::kruskal_mst(){
 		int n0 = edge_node_list[ edge_idx ][0];
 		int n1 = edge_node_list[ edge_idx ][1];
 		
-		int p0 = getNodeParentG(node_group, n0);
-		int p1 = getNodeParentG(node_group, n1);
+		int p0 = findset(n0);
+		int p1 = findset(n1);
 
 		if(p0 != p1){//此兩點不在同一個集合中
 			//點與點互相連結
@@ -144,7 +155,7 @@ void cwz_mst::build_tree(){
 	int t_c = 0;//tree node counter
 
 	node_idx_from_p_to_c[ t_c++ ] = parent_id;
-	node_weight[parent_id]    = -1;
+	node_weight[parent_id]    = 0;
 	node_parent_id[parent_id] = 0;
 
 	push(0, id_stack, id_stack_e);
@@ -160,11 +171,63 @@ void cwz_mst::build_tree(){
 			node_weight[possible_child_id] = node_conn_weights[parent_id][edge_c];
 			node_parent_id[possible_child_id] = parent_id;
 
+			child_node_list[parent_id][ child_node_num[parent_id]++ ] = possible_child_id;
+
 			if( node_conn_node_num[possible_child_id] > 0 )
 				push(possible_child_id, id_stack, id_stack_e);
 		}
 	}
 }
+//
+void cwz_mst::cost_agt(float *match_cost_result){
+	
+	//up agt
+	for(int i = node_amt-1 ; i >= 0 ; i--){
+		int node_i = node_idx_from_p_to_c[i];
+		int node_disparity_i = node_i * disparityLevel;
+
+		for(int d=0 ; d<disparityLevel ; d++)
+			agt_result[ node_disparity_i+d ] = match_cost_result[ node_disparity_i+d ];
+
+		for(int child_c=0 ; child_c < child_node_num[node_i] ; child_c++){
+			int child_i = child_node_list[node_i][child_c];
+			int child_disparity_i = child_i * disparityLevel;
+
+			for(int d=0 ; d<disparityLevel ; d++){
+				agt_result[ node_disparity_i+d ] += agt_result[ child_disparity_i+d ] * whistogram[ node_weight[child_i] ];
+			}
+		}
+	}
+	//down agt
+	for(int i=1 ; i<node_amt ; i++){
+		int node_i = node_idx_from_p_to_c[i];
+		int parent_i = node_parent_id[node_i];
+		int node_disparity_i = node_i * disparityLevel;
+		int parent_disparity_i = parent_i * disparityLevel;
+
+		float w = whistogram[ node_weight[ node_i ] ];
+		float one_m_sqw = (1.0 - w * w);
+
+		for(int d=0 ; d<disparityLevel ; d++){
+			agt_result[node_disparity_i+d] = w           * agt_result[ parent_disparity_i+d ] +
+											 (one_m_sqw) * agt_result[node_disparity_i+d];
+		}
+	}
+}
+TEleUnit *cwz_mst::pick_best_dispairty(){
+	for(int i=0 ; i<this->node_amt ; i++){
+		int i_ = i * disparityLevel;
+
+		float min_cost = agt_result[i_+0];
+		best_disparity[i] = 0;
+		for(int d=1 ; d<disparityLevel ; d++){
+			if( agt_result[i_+d] < min_cost)
+				best_disparity[i] = d;
+		}
+	}
+	return best_disparity;
+}
+//
 void cwz_mst::mst(){
 	if( this->isInit && this->hasImg ){
 		this->build_edges();
@@ -174,25 +237,45 @@ void cwz_mst::mst(){
 	}
 }
 void cwz_mst::profile_mst(){
-	printf("start mst profiling:\n");
+	printf("--	start mst profiling	--\n");
+	double total = 0;
+	double build_edge_s;
+	double counting_sort_s;
+	double kruskal_s;
+	double build_tree_s;
 	time_t start;
 	if( this->isInit && this->hasImg ){
 		start = clock();
 		this->build_edges();
-		printf("build_edges: %fs\n", double(clock() - start) / CLOCKS_PER_SEC);
+		build_edge_s = double(clock() - start) / CLOCKS_PER_SEC;
 
 		start = clock();
 		this->counting_sort();
-		printf("counting_sort: %fs\n", double(clock() - start) / CLOCKS_PER_SEC);
+		counting_sort_s = double(clock() - start) / CLOCKS_PER_SEC;
 
 		start = clock();
 		this->kruskal_mst();
-		printf("kruskal_mst: %fs\n", double(clock() - start) / CLOCKS_PER_SEC);
+		kruskal_s = double(clock() - start) / CLOCKS_PER_SEC;
 
 		start = clock();
 		this->build_tree();
-		printf("build_tree: %fs\n", double(clock() - start) / CLOCKS_PER_SEC);
+		build_tree_s = double(clock() - start) / CLOCKS_PER_SEC;
+
+		printf("build_edges  : %2.4fs\n", build_edge_s);
+		printf("counting_sort: %2.4fs\n", counting_sort_s);
+		printf("kruskal_mst  : %2.4fs\n", kruskal_s);
+		printf("build_tree   : %2.4fs\n", build_tree_s);
+		printf("---------------------\n");
+		printf("   total time: %2.4fs\n", build_edge_s+counting_sort_s+kruskal_s+build_tree_s);
+
+		int total_w = 0;
+		for(int i=0 ; i<this->node_amt ; i++){
+			total_w += node_weight[i];
+		}
+		printf("     node_amt: %d nodes\n", node_amt);
+		printf(" total weight: %d\n", total_w);
 	}
+	printf("--	endof mst profiling	--\n");
 }
 //for reuse
 void cwz_mst::reinit(){
@@ -200,8 +283,10 @@ void cwz_mst::reinit(){
 	for(int i=0 ; i<this->node_amt ; i++){ this->node_group[i] = i; }
 	memset(this->node_conn_node_num, 0, sizeof(int) * this->node_amt);
 	this->id_stack_e = -1;
+	memset(this->child_node_num, 0, sizeof(int) * this->node_amt); 
 	memset(this->node_parent_id, -1, sizeof(int) * this->node_amt); 
 }
+//for testing
 void cwz_mst::test_correctness(){
 	if( eqTypes<TEleUnit, uchar>() )
 	{//8UC1 test
@@ -255,3 +340,40 @@ void cwz_mst::test_correctness(){
 		printf("\n*********************************************\n");
 	}
 }
+
+/*float *cwz_mst_filter::up_cost_agt(float *match_cost_result, int *node_parent_id, int **child_node_list, int *child_node_num, int *node_weight, int *node_idx_from_p_to_c, float *histogram, int node_amt){
+	float *agt_result = new float[ node_amt * disparityLevel ];
+	//up agt
+	for(int i = node_amt-1 ; i >= 0 ; i--){
+		int node_i = node_idx_from_p_to_c[i];
+		int node_disparity_i = node_i * disparityLevel;
+
+		for(int d=0 ; d<disparityLevel ; d++)
+			agt_result[ node_disparity_i+d ] = match_cost_result[ node_disparity_i+d ];
+
+		for(int child_c=0 ; child_c < child_node_num[node_i] ; child_c++){
+			int child_i = child_node_list[node_i][child_c];
+			int child_disparity_i = child_i * disparityLevel;
+
+			for(int d=0 ; d<disparityLevel ; d++){
+				agt_result[ node_disparity_i+d ] += agt_result[ child_disparity_i+d ] * histogram[ node_weight[child_i] ];
+			}
+		}
+	}
+	//down agt
+	for(int i=1 ; i<node_amt ; i++){
+		int node_i = node_idx_from_p_to_c[i];
+		int parent_i = node_parent_id[node_i];
+		int node_disparity_i = node_i * disparityLevel;
+		int parent_disparity_i = parent_i * disparityLevel;
+
+		float w = histogram[ node_weight[ node_i ] ];
+		float one_m_sqw = (1.0 - w * w);
+
+		for(int d=0 ; d<disparityLevel ; d++){
+			agt_result[node_disparity_i+d] = w           * agt_result[ parent_disparity_i+d ] +
+											 (one_m_sqw) * agt_result[node_disparity_i+d];
+		}
+	}
+	return agt_result;
+}*/
