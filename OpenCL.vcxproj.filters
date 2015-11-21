@@ -40,10 +40,13 @@
     <ClInclude Include="common_func.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="cl_data_type.h">
+    <ClInclude Include="cwz_mst.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="cwz_mst.h">
+    <ClInclude Include="cwz_cl_data_type.h">
+      <Filter>標頭檔</Filter>
+    </ClInclude>
+    <ClInclude Include="cwz_cl_cpp_functions.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
   </ItemGroup>

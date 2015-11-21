@@ -3,7 +3,17 @@
 
 #include <opencv2\opencv.hpp>
 
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <string>
 #include <fstream>
+
+#include <time.h>
+
+#define IntensityLimit 256
+#define disparityLevel 100
 
 struct cl_match_elem{
 	int *rgb;

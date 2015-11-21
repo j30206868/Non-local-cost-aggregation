@@ -1,6 +1,8 @@
 #ifndef CWZ_NON_LOCAL_COST_H
 #define CWZ_NON_LOCAL_COST_H
-
+/********************************************
+		This file is not used anymore
+********************************************/
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -20,7 +22,7 @@
 #include "common_func.h"
 
 #define IntensityLimit 256
-#define disparityLevel 100
+#define disparityLevel 60
 
 /******************************************************
 					Data Structure
@@ -140,8 +142,6 @@ private:
 	static bool const UPAGT_TraceEachStep   = false;
 	static bool const DOWNAGT_TraceEachStep = false;
 };
-
-void compute_gradient(float*gradient, uchar **gray_image, int h, int w);
 
 #endif // !CWZ_NON_LOCAL_COST_H
 

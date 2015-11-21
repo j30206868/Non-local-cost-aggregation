@@ -1,7 +1,7 @@
 #ifndef CWZ_MST_H
 #define CWZ_MST_H
 
-#include "cwz_non_local_cost.h"
+#include "common_func.h"
 
 typedef uchar TEleUnit;
 
